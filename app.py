@@ -1,8 +1,12 @@
 from flask import Flask, request, jsonify
-from models import db, Game, GameCreate, GameResponse, GameDetail
+from models import (
+    db, Game, User, GameCreate, GameResponse, GameDetail,
+    UserCreate, UserLogin, GameUpdate, token_required, admin_required
+)
 from flask_migrate import Migrate
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -11,23 +15,85 @@ app = Flask(__name__)
 # Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///games.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 
 # Initialize extensions
 db.init_app(app)
 migrate = Migrate(app, db)
 
+# Authentication endpoints
+@app.route('/auth/register', methods=['POST'])
+def register():
+    try:
+        data = request.get_json()
+        
+        # Check if user already exists
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'error': 'Email already registered'}), 400
+            
+        # Create new user
+        user = User(email=data['email'], role=data.get('role', 'user'))
+        user.set_password(data['password'])
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'User registered successfully',
+            'user_id': user.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/auth/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+        user = User.query.filter_by(email=data['email']).first()
+        
+        if not user or not user.check_password(data['password']):
+            return jsonify({'error': 'Invalid email or password'}), 401
+            
+        token = user.generate_token()
+        return jsonify({
+            'token': token,
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'role': user.role
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/auth/me', methods=['GET'])
+@token_required
+def get_user_info(current_user):
+    return jsonify({
+        'id': current_user.id,
+        'email': current_user.email,
+        'role': current_user.role
+    })
+
+# Game endpoints with pagination
 @app.route('/games', methods=['GET'])
 def get_games():
-    """Get all games"""
-    games = Game.query.all()
-    return jsonify([{
-        'game_id': game.id,
-        'title': game.title,
-        'description': game.description,
-        'price': game.price,
-        'image_url': game.image_url,
-        'stock': game.stock
-    } for game in games])
+    """Get all games with pagination"""
+    page = request.args.get('page', 1, type=int)
+    limit = request.args.get('limit', 10, type=int)
+    
+    pagination = Game.query.paginate(page=page, per_page=limit, error_out=False)
+    games = pagination.items
+    
+    return jsonify({
+        'games': [game.to_dict() for game in games],
+        'total': pagination.total,
+        'pages': pagination.pages,
+        'current_page': page
+    })
 
 @app.route('/games/<int:game_id>', methods=['GET'])
 def get_game(game_id):
@@ -36,17 +102,11 @@ def get_game(game_id):
     if not game:
         return jsonify({'error': 'Game not found'}), 404
     
-    return jsonify({
-        'game_id': game.id,
-        'title': game.title,
-        'description': game.description,
-        'price': game.price,
-        'image_url': game.image_url,
-        'stock': game.stock
-    })
+    return jsonify(game.to_dict())
 
 @app.route('/games', methods=['POST'])
-def create_game():
+@admin_required
+def create_game(current_user):
     try:
         data = request.get_json()
         
@@ -80,7 +140,8 @@ def create_game():
             description=data.get('description'),
             price=price,
             image_url=data.get('image_url'),
-            stock=stock
+            stock=stock,
+            created_by=current_user.id
         )
         
         db.session.add(new_game)
@@ -96,7 +157,8 @@ def create_game():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/games/<int:game_id>', methods=['PUT'])
-def update_game(game_id):
+@admin_required
+def update_game(current_user, game_id):
     """Update a specific game"""
     try:
         game = db.session.get(Game, game_id)
@@ -141,7 +203,8 @@ def update_game(game_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/games/<int:game_id>', methods=['DELETE'])
-def delete_game(game_id):
+@admin_required
+def delete_game(current_user, game_id):
     """Delete a specific game"""
     try:
         game = db.session.get(Game, game_id)
