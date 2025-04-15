@@ -8,6 +8,7 @@ def client():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['TESTING'] = True
     app.config['SECRET_KEY'] = 'test-secret-key'
+    app.config['JWT_SECRET_KEY'] = 'test-jwt-secret-key'
     
     with app.test_client() as client:
         with app.app_context():
@@ -20,7 +21,7 @@ def client():
 def admin_token(client):
     """Create an admin user and return their token"""
     # Create admin user
-    admin = User(email="admin@example.com", role="admin")
+    admin = User(email="admin@example.com", username="adminuser", role="admin")
     admin.set_password("admin123")
     db.session.add(admin)
     db.session.commit()
@@ -32,13 +33,13 @@ def admin_token(client):
                               "password": "admin123"
                           }),
                           content_type='application/json')
-    return json.loads(response.data)['token']
+    return json.loads(response.data)['access_token']
 
 @pytest.fixture
 def user_token(client):
     """Create a regular user and return their token"""
     # Create regular user
-    user = User(email="user@example.com", role="user")
+    user = User(email="user@example.com", username="regularuser", role="user")
     user.set_password("user123")
     db.session.add(user)
     db.session.commit()
@@ -50,7 +51,7 @@ def user_token(client):
                               "password": "user123"
                           }),
                           content_type='application/json')
-    return json.loads(response.data)['token']
+    return json.loads(response.data)['access_token']
 
 @pytest.fixture
 def sample_game():
@@ -167,8 +168,10 @@ def test_create_game_valid_request(client, admin_token):
     
     assert response.status_code == 201
     response_data = json.loads(response.data)
-    assert response_data['title'] == data['title']
-    assert response_data['price'] == data['price']
+    assert 'message' in response_data
+    assert 'game' in response_data
+    assert response_data['game']['title'] == data['title']
+    assert response_data['game']['price'] == data['price']
 
 def test_update_game_unauthorized(client, sample_game):
     """Test updating a game without authentication"""
@@ -197,7 +200,9 @@ def test_update_game_valid_request(client, admin_token, sample_game):
     
     assert response.status_code == 200
     response_data = json.loads(response.data)
-    assert response_data['price'] == data['price']
+    assert 'message' in response_data
+    assert 'game' in response_data
+    assert response_data['game']['price'] == data['price']
 
 def test_update_game_not_found(client, admin_token):
     """Test updating a non-existent game"""

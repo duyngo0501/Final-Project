@@ -5,7 +5,7 @@ from typing import Optional
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
 from functools import wraps
-from flask import current_app
+from flask import current_app, request, jsonify
 
 db = SQLAlchemy()
 
@@ -14,6 +14,7 @@ class User(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(20), nullable=False, default='user')  # 'admin' or 'user'
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -25,17 +26,15 @@ class User(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
     
-    def generate_token(self):
-        return jwt.encode(
-            {
-                'user_id': self.id,
-                'email': self.email,
-                'role': self.role,
-                'exp': datetime.now(timezone.utc).timestamp() + 86400  # 24 hours
-            },
-            current_app.config['SECRET_KEY'],
-            algorithm='HS256'
-        )
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'username': self.username,
+            'role': self.role,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
 
 class Game(db.Model):
     __tablename__ = 'games'
@@ -65,12 +64,21 @@ class Game(db.Model):
 # Pydantic Models
 class UserCreate(BaseModel):
     email: str = Field(..., regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    username: str = Field(..., min_length=3, max_length=80)
     password: str = Field(..., min_length=8)
     role: Optional[str] = Field(default='user', pattern='^(admin|user)$')
 
 class UserLogin(BaseModel):
     email: str
     password: str
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    username: str
+    role: str
+    created_at: datetime
+    updated_at: datetime
 
 class GameCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
@@ -100,6 +108,7 @@ class GameDetail(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+# Legacy token decorators - will be replaced by Flask-JWT-Extended
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
