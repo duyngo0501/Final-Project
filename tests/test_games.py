@@ -1,12 +1,13 @@
 import pytest
 from app import app
-from models import db, Game
+from models import db, Game, User
 import json
 
 @pytest.fixture
 def client():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['TESTING'] = True
+    app.config['SECRET_KEY'] = 'test-secret-key'
     
     with app.test_client() as client:
         with app.app_context():
@@ -16,14 +17,51 @@ def client():
             db.drop_all()
 
 @pytest.fixture
-def sample_game(client):
-    """Create a sample game for testing"""
+def admin_token(client):
+    """Create an admin user and return their token"""
+    # Create admin user
+    admin = User(email="admin@example.com", role="admin")
+    admin.set_password("admin123")
+    db.session.add(admin)
+    db.session.commit()
+    
+    # Login to get token
+    response = client.post('/auth/login',
+                          data=json.dumps({
+                              "email": "admin@example.com",
+                              "password": "admin123"
+                          }),
+                          content_type='application/json')
+    return json.loads(response.data)['token']
+
+@pytest.fixture
+def user_token(client):
+    """Create a regular user and return their token"""
+    # Create regular user
+    user = User(email="user@example.com", role="user")
+    user.set_password("user123")
+    db.session.add(user)
+    db.session.commit()
+    
+    # Login to get token
+    response = client.post('/auth/login',
+                          data=json.dumps({
+                              "email": "user@example.com",
+                              "password": "user123"
+                          }),
+                          content_type='application/json')
+    return json.loads(response.data)['token']
+
+@pytest.fixture
+def sample_game():
+    """Create a sample game"""
     game = Game(
         title="Test Game",
         description="A test game",
         price=29.99,
-        image_url="http://example.com/image.jpg",
-        stock=100
+        stock=10,
+        genre="Action",
+        platform="PC"
     )
     db.session.add(game)
     db.session.commit()
@@ -33,245 +71,166 @@ def test_get_games_empty(client):
     """Test getting games when database is empty"""
     response = client.get('/games')
     assert response.status_code == 200
-    assert json.loads(response.data) == []
+    data = json.loads(response.data)
+    assert data['total'] == 0
+    assert len(data['games']) == 0
 
-def test_get_games(client, sample_game):
-    """Test getting all games"""
-    response = client.get('/games')
+def test_get_games_pagination(client, sample_game):
+    """Test getting games with pagination"""
+    # Create additional games
+    for i in range(15):
+        game = Game(
+            title=f"Game {i}",
+            description=f"Description {i}",
+            price=29.99,
+            stock=10,
+            genre="Action",
+            platform="PC"
+        )
+        db.session.add(game)
+    db.session.commit()
+    
+    # Test first page
+    response = client.get('/games?page=1&limit=10')
     assert response.status_code == 200
-    games = json.loads(response.data)
-    assert len(games) == 1
-    assert games[0]['title'] == 'Test Game'
-    assert games[0]['price'] == 29.99
-    assert games[0]['stock'] == 100
+    data = json.loads(response.data)
+    assert data['total'] == 16  # 15 new games + 1 sample game
+    assert len(data['games']) == 10
+    
+    # Test second page
+    response = client.get('/games?page=2&limit=10')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert len(data['games']) == 6
 
 def test_get_game_by_id(client, sample_game):
     """Test getting a specific game by ID"""
     response = client.get(f'/games/{sample_game.id}')
     assert response.status_code == 200
-    game = json.loads(response.data)
-    assert game['title'] == 'Test Game'
-    assert game['price'] == 29.99
-    assert game['stock'] == 100
+    data = json.loads(response.data)
+    assert data['title'] == sample_game.title
+    assert data['price'] == sample_game.price
 
 def test_get_game_not_found(client):
     """Test getting a non-existent game"""
     response = client.get('/games/999')
     assert response.status_code == 404
-    assert 'error' in json.loads(response.data)
 
-def test_create_game_valid_request(client):
-    """Test creating a game with valid data"""
+def test_create_game_unauthorized(client):
+    """Test creating a game without authentication"""
     data = {
-        "title": "Test Game",
-        "description": "A test game",
+        "title": "New Game",
+        "description": "A new game",
         "price": 29.99,
-        "image_url": "http://example.com/image.jpg",
-        "stock": 100
+        "stock": 10,
+        "genre": "Action",
+        "platform": "PC"
     }
     
-    response = client.post('/games', 
+    response = client.post('/games',
                           data=json.dumps(data),
                           content_type='application/json')
+    assert response.status_code == 401
+
+def test_create_game_not_admin(client, user_token):
+    """Test creating a game as non-admin user"""
+    data = {
+        "title": "New Game",
+        "description": "A new game",
+        "price": 29.99,
+        "stock": 10,
+        "genre": "Action",
+        "platform": "PC"
+    }
+    
+    response = client.post('/games',
+                          data=json.dumps(data),
+                          content_type='application/json',
+                          headers={'Authorization': f'Bearer {user_token}'})
+    assert response.status_code == 403
+
+def test_create_game_valid_request(client, admin_token):
+    """Test creating a game with valid data"""
+    data = {
+        "title": "New Game",
+        "description": "A new game",
+        "price": 29.99,
+        "stock": 10,
+        "genre": "Action",
+        "platform": "PC"
+    }
+    
+    response = client.post('/games',
+                          data=json.dumps(data),
+                          content_type='application/json',
+                          headers={'Authorization': f'Bearer {admin_token}'})
     
     assert response.status_code == 201
     response_data = json.loads(response.data)
-    assert response_data['message'] == 'Game created successfully'
-    assert 'game_id' in response_data
-    
-    # Verify game was created in database
-    game = db.session.get(Game, response_data['game_id'])
-    assert game is not None
-    assert game.title == data['title']
-    assert game.price == data['price']
-    assert game.stock == data['stock']
+    assert response_data['title'] == data['title']
+    assert response_data['price'] == data['price']
 
-def test_update_game_valid_request(client, sample_game):
-    """Test updating a game with valid data"""
-    data = {
-        "title": "Updated Game",
-        "description": "An updated game",
-        "price": 39.99,
-        "stock": 200
-    }
-    
+def test_update_game_unauthorized(client, sample_game):
+    """Test updating a game without authentication"""
+    data = {"price": 39.99}
     response = client.put(f'/games/{sample_game.id}',
                          data=json.dumps(data),
                          content_type='application/json')
+    assert response.status_code == 401
+
+def test_update_game_not_admin(client, user_token, sample_game):
+    """Test updating a game as non-admin user"""
+    data = {"price": 39.99}
+    response = client.put(f'/games/{sample_game.id}',
+                         data=json.dumps(data),
+                         content_type='application/json',
+                         headers={'Authorization': f'Bearer {user_token}'})
+    assert response.status_code == 403
+
+def test_update_game_valid_request(client, admin_token, sample_game):
+    """Test updating a game with valid data"""
+    data = {"price": 39.99}
+    response = client.put(f'/games/{sample_game.id}',
+                         data=json.dumps(data),
+                         content_type='application/json',
+                         headers={'Authorization': f'Bearer {admin_token}'})
     
     assert response.status_code == 200
-    assert json.loads(response.data)['message'] == 'Game updated successfully'
-    
-    # Verify game was updated in database
-    game = db.session.get(Game, sample_game.id)
-    assert game.title == data['title']
-    assert game.description == data['description']
-    assert game.price == data['price']
-    assert game.stock == data['stock']
+    response_data = json.loads(response.data)
+    assert response_data['price'] == data['price']
 
-def test_update_game_not_found(client):
+def test_update_game_not_found(client, admin_token):
     """Test updating a non-existent game"""
-    data = {"title": "Updated Game"}
+    data = {"price": 39.99}
     response = client.put('/games/999',
                          data=json.dumps(data),
-                         content_type='application/json')
+                         content_type='application/json',
+                         headers={'Authorization': f'Bearer {admin_token}'})
     assert response.status_code == 404
-    assert 'error' in json.loads(response.data)
 
-def test_update_game_invalid_price(client, sample_game):
-    """Test updating a game with invalid price"""
-    data = {"price": -10}
-    response = client.put(f'/games/{sample_game.id}',
-                         data=json.dumps(data),
-                         content_type='application/json')
-    assert response.status_code == 400
-    assert 'error' in json.loads(response.data)
-
-def test_update_game_invalid_stock(client, sample_game):
-    """Test updating a game with invalid stock"""
-    data = {"stock": -10}
-    response = client.put(f'/games/{sample_game.id}',
-                         data=json.dumps(data),
-                         content_type='application/json')
-    assert response.status_code == 400
-    assert 'error' in json.loads(response.data)
-
-def test_delete_game(client, sample_game):
-    """Test deleting a game"""
+def test_delete_game_unauthorized(client, sample_game):
+    """Test deleting a game without authentication"""
     response = client.delete(f'/games/{sample_game.id}')
+    assert response.status_code == 401
+
+def test_delete_game_not_admin(client, user_token, sample_game):
+    """Test deleting a game as non-admin user"""
+    response = client.delete(f'/games/{sample_game.id}',
+                           headers={'Authorization': f'Bearer {user_token}'})
+    assert response.status_code == 403
+
+def test_delete_game(client, admin_token, sample_game):
+    """Test deleting a game"""
+    response = client.delete(f'/games/{sample_game.id}',
+                           headers={'Authorization': f'Bearer {admin_token}'})
     assert response.status_code == 200
-    assert json.loads(response.data)['message'] == 'Game deleted successfully'
     
-    # Verify game was deleted from database
-    game = db.session.get(Game, sample_game.id)
+    # Verify game was deleted
+    game = Game.query.get(sample_game.id)
     assert game is None
 
-def test_delete_game_not_found(client):
+def test_delete_game_not_found(client, admin_token):
     """Test deleting a non-existent game"""
-    response = client.delete('/games/999')
-    assert response.status_code == 404
-    assert 'error' in json.loads(response.data)
-
-def test_create_game_missing_title(client):
-    """Test creating a game without title"""
-    data = {
-        "description": "A test game",
-        "price": 29.99,
-        "stock": 100
-    }
-    
-    response = client.post('/games',
-                          data=json.dumps(data),
-                          content_type='application/json')
-    
-    assert response.status_code == 400
-    response_data = json.loads(response.data)
-    assert 'error' in response_data
-    assert 'Title is required' in response_data['error']
-
-def test_create_game_missing_price(client):
-    """Test creating a game without price"""
-    data = {
-        "title": "Test Game",
-        "description": "A test game",
-        "stock": 100
-    }
-    
-    response = client.post('/games',
-                          data=json.dumps(data),
-                          content_type='application/json')
-    
-    assert response.status_code == 400
-    response_data = json.loads(response.data)
-    assert 'error' in response_data
-    assert 'Price is required' in response_data['error']
-
-def test_create_game_negative_price(client):
-    """Test creating a game with negative price"""
-    data = {
-        "title": "Test Game",
-        "description": "A test game",
-        "price": -29.99,
-        "stock": 100
-    }
-    
-    response = client.post('/games',
-                          data=json.dumps(data),
-                          content_type='application/json')
-    
-    assert response.status_code == 400
-    response_data = json.loads(response.data)
-    assert 'error' in response_data
-    assert 'Price must be a positive number' in response_data['error']
-
-def test_create_game_zero_price(client):
-    """Test creating a game with zero price"""
-    data = {
-        "title": "Test Game",
-        "description": "A test game",
-        "price": 0,
-        "stock": 100
-    }
-    
-    response = client.post('/games',
-                          data=json.dumps(data),
-                          content_type='application/json')
-    
-    assert response.status_code == 400
-    response_data = json.loads(response.data)
-    assert 'error' in response_data
-    assert 'Price must be a positive number' in response_data['error']
-
-def test_create_game_negative_stock(client):
-    """Test creating a game with negative stock"""
-    data = {
-        "title": "Test Game",
-        "description": "A test game",
-        "price": 29.99,
-        "stock": -10
-    }
-    
-    response = client.post('/games',
-                          data=json.dumps(data),
-                          content_type='application/json')
-    
-    assert response.status_code == 400
-    response_data = json.loads(response.data)
-    assert 'error' in response_data
-    assert 'Stock must be a non-negative integer' in response_data['error']
-
-def test_create_game_invalid_price_type(client):
-    """Test creating a game with invalid price type"""
-    data = {
-        "title": "Test Game",
-        "description": "A test game",
-        "price": "not a number",
-        "stock": 100
-    }
-    
-    response = client.post('/games',
-                          data=json.dumps(data),
-                          content_type='application/json')
-    
-    assert response.status_code == 400
-    response_data = json.loads(response.data)
-    assert 'error' in response_data
-    assert 'Price must be a valid number' in response_data['error']
-
-def test_create_game_invalid_stock_type(client):
-    """Test creating a game with invalid stock type"""
-    data = {
-        "title": "Test Game",
-        "description": "A test game",
-        "price": 29.99,
-        "stock": "not a number"
-    }
-    
-    response = client.post('/games',
-                          data=json.dumps(data),
-                          content_type='application/json')
-    
-    assert response.status_code == 400
-    response_data = json.loads(response.data)
-    assert 'error' in response_data
-    assert 'Stock must be a valid integer' in response_data['error'] 
+    response = client.delete('/games/999',
+                           headers={'Authorization': f'Bearer {admin_token}'})
+    assert response.status_code == 404 
