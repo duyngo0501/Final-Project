@@ -8,6 +8,7 @@ from flask_jwt_extended import (
     JWTManager, create_access_token, get_jwt_identity, 
     jwt_required, create_refresh_token
 )
+from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
@@ -16,6 +17,7 @@ from pydantic import ValidationError
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
 
 # Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///games.db')
