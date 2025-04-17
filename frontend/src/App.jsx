@@ -6,7 +6,7 @@ import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
 import GamesPage from './pages/GamesPage';
 import GameDetailPage from './pages/GameDetailPage';
-import CartPage from './pages/CartPage';
+import Cart from './pages/Cart';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
@@ -24,7 +24,14 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/games" element={<GamesPage />} />
                 <Route path="/games/:id" element={<GameDetailPage />} />
-                <Route path="/cart" element={<CartPage />} />
+                <Route
+                  path="/cart"
+                  element={
+                    <PrivateRoute>
+                      <Cart />
+                    </PrivateRoute>
+                  }
+                />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route

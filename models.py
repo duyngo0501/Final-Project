@@ -61,6 +61,47 @@ class Game(db.Model):
             'updated_at': self.updated_at.isoformat()
         }
 
+class CartItem(db.Model):
+    __tablename__ = 'cart_items'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    cart_id = db.Column(db.Integer, db.ForeignKey('carts.id'), nullable=False)
+    game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    game = db.relationship('Game', backref='cart_items')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'game_id': self.game_id,
+            'quantity': self.quantity,
+            'game': self.game.to_dict() if self.game else None
+        }
+
+class Cart(db.Model):
+    __tablename__ = 'carts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    user = db.relationship('User', backref='cart')
+    items = db.relationship('CartItem', backref='cart', cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'items': [item.to_dict() for item in self.items],
+            'total_price': sum(item.game.price * item.quantity for item in self.items if item.game),
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat()
+        }
+
 # Pydantic Models
 class UserCreate(BaseModel):
     email: str = Field(..., regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
@@ -107,6 +148,14 @@ class GameDetail(BaseModel):
     stock: int
     created_at: datetime
     updated_at: datetime
+
+# Pydantic Models for Cart
+class CartItemCreate(BaseModel):
+    game_id: int = Field(..., gt=0)
+    quantity: int = Field(..., gt=0)
+
+class CartItemUpdate(BaseModel):
+    quantity: int = Field(..., gt=0)
 
 # Legacy token decorators - will be replaced by Flask-JWT-Extended
 def token_required(f):

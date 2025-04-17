@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from models import (
     db, Game, User, GameCreate, GameResponse, GameDetail,
-    UserCreate, UserLogin, UserResponse, GameUpdate
+    UserCreate, UserLogin, UserResponse, GameUpdate, Cart, CartItem, CartItemCreate, CartItemUpdate
 )
 from flask_migrate import Migrate
 from flask_jwt_extended import (
@@ -264,6 +264,153 @@ def delete_game(game_id):
         db.session.delete(game)
         db.session.commit()
         return jsonify({'message': 'Game deleted successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Cart endpoints
+@app.route('/api/cart', methods=['GET'])
+@jwt_required()
+def get_cart():
+    """Get the current user's cart"""
+    current_user_id = get_jwt_identity()
+    
+    # Get or create cart for user
+    cart = Cart.query.filter_by(user_id=current_user_id).first()
+    if not cart:
+        cart = Cart(user_id=current_user_id)
+        db.session.add(cart)
+        db.session.commit()
+    
+    return jsonify(cart.to_dict())
+
+@app.route('/api/cart/add', methods=['POST'])
+@jwt_required()
+def add_to_cart():
+    """Add a game to the user's cart"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        # Validate input data
+        cart_item_data = CartItemCreate(**data)
+        
+        # Get or create cart
+        cart = Cart.query.filter_by(user_id=current_user_id).first()
+        if not cart:
+            cart = Cart(user_id=current_user_id)
+            db.session.add(cart)
+            db.session.commit()
+        
+        # Check if game exists
+        game = Game.query.get(cart_item_data.game_id)
+        if not game:
+            return jsonify({'error': 'Game not found'}), 404
+            
+        # Check if game is in stock
+        if game.stock < cart_item_data.quantity:
+            return jsonify({'error': 'Not enough stock available'}), 400
+            
+        # Check if game already in cart
+        cart_item = CartItem.query.filter_by(
+            cart_id=cart.id,
+            game_id=cart_item_data.game_id
+        ).first()
+        
+        if cart_item:
+            # Update quantity if game already in cart
+            cart_item.quantity += cart_item_data.quantity
+        else:
+            # Add new item to cart
+            cart_item = CartItem(
+                cart_id=cart.id,
+                game_id=cart_item_data.game_id,
+                quantity=cart_item_data.quantity
+            )
+            db.session.add(cart_item)
+        
+        db.session.commit()
+        return jsonify(cart.to_dict())
+        
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cart/update', methods=['PUT'])
+@jwt_required()
+def update_cart_item():
+    """Update quantity of a game in the cart"""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json()
+        
+        # Validate input data
+        cart_item_data = CartItemUpdate(**data)
+        game_id = data.get('game_id')
+        
+        if not game_id:
+            return jsonify({'error': 'Game ID is required'}), 400
+            
+        # Get cart
+        cart = Cart.query.filter_by(user_id=current_user_id).first()
+        if not cart:
+            return jsonify({'error': 'Cart not found'}), 404
+            
+        # Get cart item
+        cart_item = CartItem.query.filter_by(
+            cart_id=cart.id,
+            game_id=game_id
+        ).first()
+        
+        if not cart_item:
+            return jsonify({'error': 'Game not found in cart'}), 404
+            
+        # Check if game is in stock
+        game = Game.query.get(game_id)
+        if game.stock < cart_item_data.quantity:
+            return jsonify({'error': 'Not enough stock available'}), 400
+            
+        # Update quantity
+        cart_item.quantity = cart_item_data.quantity
+        db.session.commit()
+        
+        return jsonify(cart.to_dict())
+        
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cart/remove/<int:game_id>', methods=['DELETE'])
+@jwt_required()
+def remove_from_cart(game_id):
+    """Remove a game from the cart"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Get cart
+        cart = Cart.query.filter_by(user_id=current_user_id).first()
+        if not cart:
+            return jsonify({'error': 'Cart not found'}), 404
+            
+        # Get cart item
+        cart_item = CartItem.query.filter_by(
+            cart_id=cart.id,
+            game_id=game_id
+        ).first()
+        
+        if not cart_item:
+            return jsonify({'error': 'Game not found in cart'}), 404
+            
+        # Remove item
+        db.session.delete(cart_item)
+        db.session.commit()
+        
+        return jsonify(cart.to_dict())
         
     except Exception as e:
         db.session.rollback()
