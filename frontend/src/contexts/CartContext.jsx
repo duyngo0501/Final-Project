@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { getCart, addToCart as addToCartApi, updateCartItem, removeFromCart as removeFromCartApi } from '../services/cartService';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -11,78 +13,89 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
-  // Initialize cart from localStorage if available
-  const [cart, setCart] = useState(() => {
-    const savedCart = localStorage.getItem('cart');
-    return savedCart ? JSON.parse(savedCart) : [];
-  });
+  const [cart, setCart] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { isAuthenticated } = useAuth();
 
-  // Save cart to localStorage whenever it changes
+  // Fetch cart when user is authenticated
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-  }, [cart]);
+    if (isAuthenticated) {
+      fetchCart();
+    } else {
+      setCart(null);
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  const fetchCart = async () => {
+    try {
+      setLoading(true);
+      const data = await getCart();
+      setCart(data);
+      setError(null);
+    } catch (err) {
+      setError(err.message || 'Failed to fetch cart');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Add a game to the cart
-  const addToCart = (game) => {
-    setCart((prevCart) => {
-      // Check if game already exists in cart
-      const existingItem = prevCart.find((item) => item.id === game.id);
-      
-      if (existingItem) {
-        // If game exists, increment quantity
-        return prevCart.map((item) =>
-          item.id === game.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      } else {
-        // If game doesn't exist, add it with quantity 1
-        return [...prevCart, { ...game, quantity: 1 }];
-      }
-    });
+  const addToCart = async (gameId, quantity = 1) => {
+    try {
+      const updatedCart = await addToCartApi(gameId, quantity);
+      setCart(updatedCart);
+      return updatedCart;
+    } catch (err) {
+      setError(err.message || 'Failed to add item to cart');
+      throw err;
+    }
   };
 
   // Remove a game from the cart
-  const removeFromCart = (gameId) => {
-    setCart((prevCart) => prevCart.filter((item) => item.id !== gameId));
+  const removeFromCart = async (gameId) => {
+    try {
+      const updatedCart = await removeFromCartApi(gameId);
+      setCart(updatedCart);
+      return updatedCart;
+    } catch (err) {
+      setError(err.message || 'Failed to remove item from cart');
+      throw err;
+    }
   };
 
   // Update quantity of a game in the cart
-  const updateQuantity = (gameId, quantity) => {
-    if (quantity <= 0) {
-      removeFromCart(gameId);
-      return;
+  const updateQuantity = async (gameId, quantity) => {
+    try {
+      if (quantity <= 0) {
+        return removeFromCart(gameId);
+      }
+      const updatedCart = await updateCartItem(gameId, quantity);
+      setCart(updatedCart);
+      return updatedCart;
+    } catch (err) {
+      setError(err.message || 'Failed to update quantity');
+      throw err;
     }
-    
-    setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.id === gameId ? { ...item, quantity } : item
-      )
-    );
-  };
-
-  // Clear the cart
-  const clearCart = () => {
-    setCart([]);
   };
 
   // Calculate total items in cart
-  const totalItems = cart.reduce((total, item) => total + item.quantity, 0);
+  const totalItems = cart?.items?.reduce((total, item) => total + item.quantity, 0) || 0;
 
   // Calculate total price of cart
-  const totalPrice = cart.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0
-  );
+  const totalPrice = cart?.total_price || 0;
 
   const value = {
     cart,
+    loading,
+    error,
     addToCart,
     removeFromCart,
     updateQuantity,
-    clearCart,
     totalItems,
     totalPrice,
+    refreshCart: fetchCart,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
