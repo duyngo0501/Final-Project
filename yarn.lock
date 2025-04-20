@@ -716,7 +716,20 @@
     remeda "^2.21.3"
     typescript "^5.8.3"
 
-"@kubb/plugin-oas@3.10.0":
+"@kubb/plugin-client@^3.10.0":
+  version "3.10.0"
+  resolved "https://registry.npmjs.org/@kubb/plugin-client/-/plugin-client-3.10.0.tgz"
+  integrity sha512-NeamWxj5PORcIorK1kPBajRtTOPRFGp7mH+MtUNJuT5ajgF7kFXzj326A3Uz89t/UDj0jybl+mXQmELT9BOWSg==
+  dependencies:
+    "@kubb/core" "3.10.0"
+    "@kubb/fs" "3.10.0"
+    "@kubb/oas" "3.10.0"
+    "@kubb/plugin-oas" "3.10.0"
+    "@kubb/plugin-ts" "3.10.0"
+    "@kubb/plugin-zod" "3.10.0"
+    "@kubb/react" "3.10.0"
+
+"@kubb/plugin-oas@^3.10.0", "@kubb/plugin-oas@3.10.0":
   version "3.10.0"
   resolved "https://registry.npmjs.org/@kubb/plugin-oas/-/plugin-oas-3.10.0.tgz"
   integrity sha512-S1XJWtcVqf81p953pDj5l5UZQvnKJN4yq2V1FlGDBebd3uMKFHoaba0C760cVjZ034CuyWbSCfW8S/g0pSDPEw==
@@ -728,7 +741,31 @@
     "@stoplight/yaml" "^4.3.0"
     remeda "^2.21.3"
 
-"@kubb/plugin-ts@3.10.0":
+"@kubb/plugin-react-query@^3.10.0":
+  version "3.10.0"
+  resolved "https://registry.npmjs.org/@kubb/plugin-react-query/-/plugin-react-query-3.10.0.tgz"
+  integrity sha512-qgFQAv+qXJYZ/B0Scd6jLELb0pXgywfIsZcQUYr94m1DU6h8W+/O3P2K2f0BDuqS5wnNRbZPToDYseT8uxGouQ==
+  dependencies:
+    "@kubb/core" "3.10.0"
+    "@kubb/fs" "3.10.0"
+    "@kubb/oas" "3.10.0"
+    "@kubb/plugin-oas" "3.10.0"
+    "@kubb/plugin-ts" "3.10.0"
+    "@kubb/plugin-zod" "3.10.0"
+    "@kubb/react" "3.10.0"
+    remeda "^2.21.3"
+
+"@kubb/plugin-redoc@^3.10.0":
+  version "3.10.0"
+  resolved "https://registry.npmjs.org/@kubb/plugin-redoc/-/plugin-redoc-3.10.0.tgz"
+  integrity sha512-qeKsSFkZE+R7xUaxVdlNqt9vjgdkUmLZMg1mTNy2MeQHBi7A5I4yMXaXvpmVuAokIO/x+2WA8gbL7QzsHSXCLg==
+  dependencies:
+    "@kubb/core" "3.10.0"
+    "@kubb/oas" "3.10.0"
+    "@kubb/plugin-oas" "3.10.0"
+    handlebars "^4.7.8"
+
+"@kubb/plugin-ts@^3.10.0", "@kubb/plugin-ts@3.10.0":
   version "3.10.0"
   resolved "https://registry.npmjs.org/@kubb/plugin-ts/-/plugin-ts-3.10.0.tgz"
   integrity sha512-2mEt+AFrFqxTEBmQTSrsdNlKedMLRMlm+a6VOzvBpQw+gLtkndInYr11kS9lecfu7SI1tdQiJFqFRQXxI48D3g==
@@ -740,7 +777,7 @@
     "@kubb/plugin-oas" "3.10.0"
     "@kubb/react" "3.10.0"
 
-"@kubb/plugin-zod@^3.10.0":
+"@kubb/plugin-zod@^3.10.0", "@kubb/plugin-zod@3.10.0":
   version "3.10.0"
   resolved "https://registry.npmjs.org/@kubb/plugin-zod/-/plugin-zod-3.10.0.tgz"
   integrity sha512-7ucYcu9dw1uZvk6Hno1mljAea5tJuY+8tnF2kCMembDi7kxIjo4CKTZ/Z1WymnI8cX+H3j6AqxKCz9VythQm1A==
@@ -753,7 +790,7 @@
     "@kubb/plugin-ts" "3.10.0"
     "@kubb/react" "3.10.0"
 
-"@kubb/react@3.10.0":
+"@kubb/react@^3.0.0", "@kubb/react@3.10.0":
   version "3.10.0"
   resolved "https://registry.npmjs.org/@kubb/react/-/react-3.10.0.tgz"
   integrity sha512-NvaIGBQfRjT4E8lGBqCYEkFgIMWahg5kaFm8qasSlFr1dD3GV8FkImXDWWEdmCi3A2ijMJe1Y99vB1JqpfedFw==
@@ -1519,7 +1556,7 @@ available-typed-arrays@^1.0.7:
   dependencies:
     possible-typed-array-names "^1.0.0"
 
-axios@^1.6.7:
+axios@^1.6.7, axios@^1.7.2:
   version "1.8.4"
   resolved "https://registry.npmjs.org/axios/-/axios-1.8.4.tgz"
   integrity sha512-eBSYY4Y68NNlHbHBMdeDmKNtDgXWhQsJcGqzO3iLUM0GraQFSS9cVgPX5I9b3lbdFKyYoAEGAZF1DwhTaljNAw==
@@ -2926,6 +2963,7 @@ fresh@0.5.2:
   version "0.0.0"
   resolved "file:apps/frontend"
   dependencies:
+    "@ant-design/pro-layout" "^7.22.4"
     "@anthropic-ai/sdk" "^0.39.0"
     "@heroicons/react" "^2.1.1"
     "@tanstack/react-query" "^5.74.4"

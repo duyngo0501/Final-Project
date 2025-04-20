@@ -60,4 +60,52 @@ curl -X DELETE http://localhost:8000/api/v1/items/delete/{item_id} \
 ---
 
 *Remember to check your specific API routes (e.g., in `utils.py`, authentication routes) for more endpoints.*
-*Access the interactive docs at `http://localhost:8000/docs` for a full list and testing UI.* 
+*Access the interactive docs at `http://localhost:8000/docs` for a full list and testing UI.*
+
+## Cart Commands (Requires Authentication)
+
+Replace `YOUR_AUTH_TOKEN` with a real token and `{product_id}` with a valid product UUID.
+
+**Get Cart Contents:**
+```bash
+curl http://localhost:8000/api/v1/cart/ \
+-H "Authorization: Bearer YOUR_AUTH_TOKEN"
+```
+*(Returns the user's cart, possibly creating an empty one first)*
+
+**Add Item to Cart (e.g., 2 units of product_id):**
+```bash
+curl -X POST http://localhost:8000/api/v1/cart/items \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer YOUR_AUTH_TOKEN" \
+-d '{
+  "product_id": "{product_id}",
+  "quantity": 2
+}'
+```
+*(Returns the created/updated cart item)*
+
+**Update Item Quantity in Cart (e.g., set quantity to 5):**
+```bash
+curl -X PUT http://localhost:8000/api/v1/cart/items/{product_id} \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer YOUR_AUTH_TOKEN" \
+-d '{
+  "quantity": 5
+}'
+```
+*(Returns the updated cart item)*
+
+**Remove Item from Cart:**
+```bash
+curl -X DELETE http://localhost:8000/api/v1/cart/items/{product_id} \
+-H "Authorization: Bearer YOUR_AUTH_TOKEN"
+```
+*(Returns 204 No Content on success)*
+
+**Clear Entire Cart:**
+```bash
+curl -X DELETE http://localhost:8000/api/v1/cart/ \
+-H "Authorization: Bearer YOUR_AUTH_TOKEN"
+```
+*(Returns 204 No Content on success)* 

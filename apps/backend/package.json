@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "nodemon",
     "gen:postman": "cd backend && uv run fastapi-openapi-to-postman http://127.0.0.1:8000/openapi.json > ../postman_collection.json",
-    "docker:build": "docker build -t backend-app ./backend",
+    "docker:build": "docker build -t backend-app .",
     "docker:run": "docker run -d --name backend-container -p 8000:8000 backend-app",
     "docker:stop": "docker stop backend-container && docker rm backend-container",
     "docker:logs": "docker logs -f backend-container"

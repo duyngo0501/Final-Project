@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "kubb generate && vite",
+    "build": "kubb generate && vite build",
     "start": "npx http-server dist",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -53,6 +53,11 @@
   "devDependencies": {
     "@kubb/cli": "^3.10.0",
     "@kubb/core": "^3.10.0",
+    "@kubb/plugin-client": "^3.10.0",
+    "@kubb/plugin-oas": "^3.10.0",
+    "@kubb/plugin-react-query": "^3.10.0",
+    "@kubb/plugin-redoc": "^3.10.0",
+    "@kubb/plugin-ts": "^3.10.0",
     "@kubb/plugin-zod": "^3.10.0",
     "@locator/runtime": "^0.4.4",
     "@types/react": "^18.2.55",
