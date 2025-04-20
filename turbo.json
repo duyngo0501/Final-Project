@@ -2,28 +2,33 @@
   "$schema": "https://turbo.build/schema.json",
   "globalDependencies": [
     ".prettierrc",
-    "pyproject.toml"
+    "tsconfig.json",
+    "apps/backend/pyproject.toml",
+    "apps/backend/alembic.ini"
   ],
   "tasks": {
-    "format": {
+    "setup": {
+      "dependsOn": ["^setup"],
       "cache": false,
-      "dependsOn": [],
-      "inputs": [
-        "src/**/*.{js,jsx,ts,tsx,md,json}",
-        "**/*.py"
-      ],
       "outputs": []
     },
-    "format:check": {
+    "frontend#dev": {
+      "dependsOn": ["^setup"],
       "cache": false,
-      "dependsOn": [],
-      "inputs": [
-        "src/**/*.{js,jsx,ts,tsx,md,json}",
-        "**/*.py"
-      ]
+      "persistent": true
     },
-    "build": {
-      "dependsOn": ["^format"]
+    "frontend#format": {
+      "cache": false,
+      "outputs": []
+    },
+    "dev": {
+      "dependsOn": ["^setup"],
+      "cache": false,
+      "persistent": true
+    },
+    "format": {
+      "cache": false,
+      "outputs": []
     }
   }
 }

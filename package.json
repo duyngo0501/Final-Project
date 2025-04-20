@@ -1,13 +1,10 @@
 {
-  "name": "Final-Project",
+  "name": "final-project",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint",
     "format": "turbo run format",
-    "format:check": "turbo run format:check",
-    "check-types": "turbo run check-types",
+    "setup": "turbo run setup",
     "list": "node scripts/dev.js list",
     "generate": "node scripts/dev.js generate",
     "parse-prd": "node scripts/dev.js parse-prd"
@@ -21,10 +18,15 @@
     "node": ">=18"
   },
   "packageManager": "yarn@1.22.22",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "nohoist": [
+      "**"
+    ]
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "boxen": "^8.0.1",
