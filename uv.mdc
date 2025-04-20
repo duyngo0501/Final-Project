@@ -1,0 +1,164 @@
+# uv: The Extremely Fast Python Package Manager
+
+`uv` is a high-performance Python package installer and resolver, written in Rust. It's developed by Astral (creators of `ruff`) and designed as a potential drop-in replacement for common `pip` and `pip-tools` workflows, offering significant speed improvements.
+
+## 1. Key Features & Benefits
+
+*   **Speed:** `uv` is significantly faster than `pip` and `conda` due to its Rust implementation and advanced dependency resolution strategies.
+*   **Drop-in Replacement:** Designed to be compatible with existing `pip` commands and `requirements.txt` / `pyproject.toml` files.
+*   **Unified Tool:** Aims to replace `pip`, `pip-tools`, `venv`, etc., with a single binary.
+*   **Dependency Resolution:** Features a fast, robust resolver.
+*   **Caching:** Implements a global cache for improved performance on subsequent installs.
+*   **Python Installation:** Can also manage Python installations (using unofficial builds).
+
+## 2. Installation
+
+You can install `uv` using various methods:
+
+**Standalone Installers:**
+
+```bash
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+irm https://astral.sh/uv/install.ps1 | iex
+```
+
+**Package Managers:**
+
+```bash
+# Using pip (installs into the current environment)
+pip install uv
+
+# Using Homebrew (macOS)
+brew install uv
+
+# Using Cargo (if you have Rust installed)
+cargo install uv
+```
+
+Verify the installation:
+
+```bash
+uv --version
+```
+
+## 3. Basic Usage
+
+`uv` mirrors many `pip` commands.
+
+### 3.1 Creating Virtual Environments
+
+Similar to `python -m venv .venv`:
+
+```bash
+uv venv
+# Or specify a path
+uv venv .venv
+```
+
+Activate the environment as usual (e.g., `source .venv/bin/activate`).
+
+### 3.2 Installing Packages
+
+Equivalent to `pip install`:
+
+```bash
+# Install from PyPI
+uv pip install requests flask
+
+# Install from requirements.txt
+uv pip install -r requirements.txt
+
+# Install from pyproject.toml
+uv pip install .
+uv pip install -e . # Editable install
+```
+
+### 3.3 Syncing Requirements
+
+Equivalent to `pip install -r requirements.txt` but ensures the environment exactly matches the file:
+
+```bash
+uv pip sync requirements.txt
+```
+
+### 3.4 Compiling Requirements (like pip-tools)
+
+Generate pinned requirement files:
+
+```bash
+# Generate requirements.txt from pyproject.toml
+uv pip compile pyproject.toml -o requirements.txt
+
+# Generate requirements-dev.txt from pyproject.toml (using dev dependencies)
+uv pip compile pyproject.toml --extra dev -o requirements-dev.txt
+```
+
+### 3.5 Removing Packages
+
+Equivalent to `pip uninstall`:
+
+```bash
+uv pip uninstall requests
+```
+
+### 3.6 Managing Python Versions
+
+`uv` can install Python interpreters (using `python-build-standalone`):
+
+```bash
+# Install Python 3.11
+uv python install 3.11
+
+# List installed Pythons
+uv python list
+
+# Find a specific Python version
+uv python find 3.10
+```
+
+## 4. Integration with `pyproject.toml`
+
+`uv` works seamlessly with `pyproject.toml`, reading dependencies and project settings. You can define project dependencies, optional dependencies (`extras`), and development dependencies directly in your `pyproject.toml`.
+
+```toml
+[project]
+name = "my-package"
+version = "0.1.0"
+dependencies = [
+    "flask>=2.0",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+```
+
+Then install using:
+
+```bash
+# Install base dependencies
+uv pip install .
+
+# Install with dev dependencies
+uv pip install .[dev]
+```
+
+## 5. Comparison with Other Tools
+
+*   **uv vs. pip:** `uv` is much faster and aims to be a more complete project/environment management tool, while largely maintaining command compatibility.
+*   **uv vs. conda:** `uv` is generally faster and focuses specifically on Python packages, whereas conda manages packages across multiple languages and handles complex binary dependencies more broadly. `uv` can now install Python itself.
+*   **uv vs. Poetry/PDM:** `uv` provides similar functionality (dependency resolution, locking, environment management) but focuses on speed and compatibility with existing `pip` workflows (`requirements.txt`, `pyproject.toml`) rather than introducing a completely new workflow and lock file format (though lock file support is planned).
+
+## 6. When to Use uv
+
+*   **Performance is critical:** For faster installs, especially in CI/CD or large projects.
+*   **Simplify tooling:** If you want a single tool for installing packages, managing environments, and potentially Python versions.
+*   **Compatibility:** When you want speed improvements without drastically changing existing `pip`/`requirements.txt` workflows.
+
+For more details, refer to the official documentation: [https://docs.astral.sh/uv/](https://docs.astral.sh/uv/) 
