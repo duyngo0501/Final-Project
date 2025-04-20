@@ -9,6 +9,9 @@ from typing import TYPE_CHECKING
 
 from sqlmodel import Enum as SQLModelEnum, Field, Relationship, SQLModel
 
+# Import the new utility function
+from app.core.utils import generate_custom_id
+
 # Conditional import for type hinting
 if TYPE_CHECKING:
     from .game import GameItem
@@ -47,8 +50,13 @@ class PromotionItem(SQLModel, table=True):
 
     __tablename__ = "promotions"
 
-    # Revert primary key back to String
-    id: str = Field(primary_key=True, index=True)
+    # Use generate_custom_id with prefix 'pr'
+    id: str = Field(
+        default_factory=lambda: generate_custom_id(prefix="pr"),
+        primary_key=True,
+        index=True,
+        nullable=False,
+    )
     code: str = Field(max_length=100, unique=True, index=True, nullable=False)
     description: str | None = Field(default=None, max_length=255)
 

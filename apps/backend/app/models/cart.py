@@ -5,7 +5,8 @@ including relationships to users and games.
 """
 
 import uuid
-from typing import TYPE_CHECKING
+from datetime import datetime
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -13,6 +14,9 @@ from sqlmodel import Field, Relationship, SQLModel
 from .user import UserItem
 
 # from .game import Game # This import might be causing issues if Game isn't defined yet or circular dependency
+
+# Import the new utility function
+from app.core.utils import generate_custom_id
 
 if TYPE_CHECKING:
     # Use TYPE_CHECKING block for models involved in circular relationships
@@ -39,7 +43,12 @@ class CartEntryItem(SQLModel, table=True):
 
     __tablename__ = "cart_entries"
 
-    id: str = Field(primary_key=True, index=True, nullable=False)
+    id: str = Field(
+        default_factory=lambda: generate_custom_id(prefix="ce"),
+        primary_key=True,
+        index=True,
+        nullable=False,
+    )
     quantity: int = Field(default=1, nullable=False)
 
     # Foreign keys
@@ -68,7 +77,12 @@ class ShoppingCartItem(SQLModel, table=True):
 
     __tablename__ = "shopping_carts"
 
-    id: str = Field(primary_key=True, index=True, nullable=False)
+    id: str = Field(
+        default_factory=lambda: generate_custom_id(prefix="sc"),
+        primary_key=True,
+        index=True,
+        nullable=False,
+    )
     # Link to our app_users table
     user_id: str = Field(foreign_key="app_users.id", unique=True, index=True)
 

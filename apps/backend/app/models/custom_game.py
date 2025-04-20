@@ -11,6 +11,9 @@ from pydantic import HttpUrl
 from sqlalchemy import Column, String
 from sqlmodel import Field, Relationship, SQLModel
 
+# Import the new utility function
+from app.core.utils import generate_custom_id
+
 # Conditional import for type hinting
 if TYPE_CHECKING:
     from .user import UserItem  # Assuming UserItem is the model in user.py
@@ -37,7 +40,12 @@ class CustomGame(SQLModel, table=True):
 
     __tablename__ = "custom_games"  # Explicit table name
 
-    id: str = Field(primary_key=True, index=True, nullable=False)
+    id: str = Field(
+        default_factory=lambda: generate_custom_id(prefix="cg"),
+        primary_key=True,
+        index=True,
+        nullable=False,
+    )
     name: str = Field(index=True, max_length=255, nullable=False)
     # Ensure slug is non-nullable if it's always required
     slug: str = Field(unique=True, index=True, max_length=255, nullable=False)
