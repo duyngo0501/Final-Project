@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Form, Input, Button, Card, Typography, Spin, Alert } from "antd";
+import { Input, Button, Card, Typography, Spin, Alert, message } from "antd";
 import { LockOutlined } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom"; // Assuming React Router for navigation
-// Assuming Supabase JS client is configured and exported
-// import { supabase } from '@/lib/supabaseClient';
+import { useNavigate } from "react-router-dom";
 
 const { Title } = Typography;
 
 /**
- * Renders the Reset Password page component.
+ * Renders the Reset Password page component using useState.
  * Allows users to set a new password after clicking the reset link.
  * Handles Supabase auth callback implicitly.
  * @returns {JSX.Element} The ResetPasswordPage component.
@@ -20,13 +18,13 @@ const ResetPasswordPage: React.FC = () => {
   const [isSupabaseSessionChecked, setIsSupabaseSessionChecked] =
     useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [form] = Form.useForm();
+  // State for form fields
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Placeholder for Supabase JS client initialization if not global
-    const supabase = (window as any).supabase; // Replace with actual import: import { supabase } from '@/lib/supabaseClient';
-
+    const supabase = (window as any).supabase; // Replace with actual import
     if (!supabase) {
       console.error("Supabase client is not available.");
       setError("Configuration error. Please contact support.");
@@ -34,34 +32,25 @@ const ResetPasswordPage: React.FC = () => {
       return;
     }
 
-    // Supabase JS client automatically handles the #access_token fragment
-    // and updates the session when the page loads after redirect.
-    // We listen for the SIGNED_IN event or PASSWORD_RECOVERY event.
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event: string, session: any) => {
         console.log("Supabase auth event:", event, session);
         if (event === "PASSWORD_RECOVERY") {
-          // This event confirms the user clicked the recovery link
-          // The session should now contain the necessary access token to update the password
           console.log("Password recovery flow initiated.");
-          // Session might be automatically set, or you might need to use setSession here
         }
-
         if (session?.access_token) {
           setAccessToken(session.access_token);
         } else {
-          // If no session after potential recovery, maybe token expired/invalid
-          // setError("Invalid or expired password reset link."); // Might cause issues if initial state is null
+          // setError("Invalid or expired password reset link."); // Avoid setting error prematurely
         }
-        setIsSupabaseSessionChecked(true); // Mark check as complete
+        setIsSupabaseSessionChecked(true);
       }
     );
 
-    // Initial check in case the event listener fires late or was missed
     const checkInitialSession = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
         if (data?.session?.access_token) {
           setAccessToken(data.session.access_token);
         }
@@ -69,28 +58,45 @@ const ResetPasswordPage: React.FC = () => {
         console.error("Error checking initial Supabase session:", err);
       } finally {
         if (!isSupabaseSessionChecked) {
-          setIsSupabaseSessionChecked(true); // Mark check complete even on error
+          setIsSupabaseSessionChecked(true);
         }
       }
     };
     checkInitialSession();
 
     return () => {
-      // Cleanup the listener when the component unmounts
       if (authListener && authListener.subscription) {
         authListener.subscription.unsubscribe();
       }
     };
-  }, [isSupabaseSessionChecked]); // Rerun if session check state changes (though usually only runs once)
+  }, [isSupabaseSessionChecked]);
 
   /**
    * Handles the form submission for resetting the password.
-   * @param {Record<string, any>} values - The form values containing the new password.
    */
-  const handleResetPasswordSubmit = async (values: Record<string, any>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(null);
+
+    // Validation
+    if (!password) {
+      message.error("Please input your new password!");
+      setLoading(false);
+      return;
+    }
+    if (password.length < 6) {
+      // Example minimum length check
+      message.error("Password must be at least 6 characters long");
+      setLoading(false);
+      return;
+    }
+    if (password !== confirmPassword) {
+      message.error("The two passwords that you entered do not match!");
+      setLoading(false);
+      return;
+    }
 
     if (!accessToken) {
       setError(
@@ -101,23 +107,22 @@ const ResetPasswordPage: React.FC = () => {
     }
 
     try {
+      // Direct fetch call (replace with your actual API client if available)
       const response = await fetch(
-        "http://localhost:5000/api/v1/auth/reset-password",
+        "http://localhost:5000/api/v1/auth/reset-password", // Ensure URL is correct
         {
-          // Assuming Flask runs on port 5000
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`, // Send the token obtained via Supabase callback
+            Authorization: `Bearer ${accessToken}`,
           },
-          body: JSON.stringify({ new_password: values.password }), // Send the new password
+          body: JSON.stringify({ new_password: password }), // Send password from state
         }
       );
 
       const result = await response.json();
 
       if (!response.ok) {
-        // Use error message from backend if available
         throw new Error(
           result.error || `HTTP error! status: ${response.status}`
         );
@@ -127,9 +132,9 @@ const ResetPasswordPage: React.FC = () => {
         result.message ||
           "Your password has been reset successfully! You can now log in."
       );
-      form.resetFields();
+      setPassword(""); // Clear fields on success
+      setConfirmPassword("");
 
-      // Optional: Redirect to login after a short delay
       setTimeout(() => navigate("/login"), 3000);
     } catch (err: any) {
       console.error("Reset password error:", err);
@@ -173,88 +178,75 @@ const ResetPasswordPage: React.FC = () => {
         <p style={{ textAlign: "center", marginBottom: "24px" }}>
           Please enter your new password below.
         </p>
-        <Form
-          form={form}
-          name="reset_password"
-          onFinish={handleResetPasswordSubmit}
-          layout="vertical"
-          requiredMark={false}
-        >
-          <Form.Item
-            name="password"
-            label="New Password"
-            rules={[
-              { required: true, message: "Please input your new password!" },
-              {
-                min: 6,
-                message: "Password must be at least 6 characters long",
-              }, // Example rule
-            ]}
-            hasFeedback
-          >
+        {/* Use standard form element */}
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              htmlFor="reset_password"
+              style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}
+            >
+              New Password
+            </label>
             <Input.Password
+              id="reset_password"
               prefix={<LockOutlined />}
               placeholder="New Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              size="large"
+              autoComplete="new-password"
             />
-          </Form.Item>
+          </div>
 
-          <Form.Item
-            name="confirm"
-            label="Confirm New Password"
-            dependencies={["password"]}
-            hasFeedback
-            rules={[
-              { required: true, message: "Please confirm your new password!" },
-              ({ getFieldValue }) => ({
-                validator(_, value) {
-                  if (!value || getFieldValue("password") === value) {
-                    return Promise.resolve();
-                  }
-                  return Promise.reject(
-                    new Error(
-                      "The two passwords that you entered do not match!"
-                    )
-                  );
-                },
-              }),
-            ]}
-          >
+          <div style={{ marginBottom: "24px" }}>
+            <label
+              htmlFor="reset_confirm"
+              style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}
+            >
+              Confirm New Password
+            </label>
             <Input.Password
+              id="reset_confirm"
               prefix={<LockOutlined />}
               placeholder="Confirm New Password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              size="large"
+              autoComplete="new-password"
             />
-          </Form.Item>
+          </div>
 
           {error && (
-            <Form.Item>
-              <Alert message={error} type="error" showIcon />
-            </Form.Item>
+            <Alert
+              message={error}
+              type="error"
+              showIcon
+              style={{ marginBottom: "16px" }}
+            />
           )}
 
           {success && (
-            <Form.Item>
-              <Alert message={success} type="success" showIcon />
-            </Form.Item>
+            <Alert
+              message={success}
+              type="success"
+              showIcon
+              style={{ marginBottom: "16px" }}
+            />
           )}
 
-          <Form.Item>
+          <div style={{ marginBottom: "16px" }}>
             <Button
               type="primary"
               htmlType="submit"
               loading={loading}
               block
-              disabled={!accessToken || !!success}
+              size="large"
+              disabled={!accessToken || !!success} // Disable if no token or already success
             >
               Reset Password
             </Button>
-          </Form.Item>
-
-          {success && (
-            <Form.Item style={{ textAlign: "center" }}>
-              <a href="/login">Proceed to Login</a>
-            </Form.Item>
-          )}
-        </Form>
+          </div>
+        </form>
       </Card>
     </div>
   );

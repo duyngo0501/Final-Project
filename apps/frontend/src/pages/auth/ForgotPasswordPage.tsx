@@ -1,13 +1,14 @@
 import React, { useState } from "react";
-import { Form, Input, Button, Card, Typography, Spin, Alert } from "antd";
+import { Input, Button, Card, Typography, Alert, message } from "antd";
 import { MailOutlined } from "@ant-design/icons";
+import { Link } from "react-router-dom";
 // Assuming an API client setup exists or will be created
 // import { apiClient } from '@/lib/api-client';
 
 const { Title } = Typography;
 
 /**
- * Renders the Forgot Password page component.
+ * Renders the Forgot Password page component using useState.
  * Allows users to enter their email address to receive a password reset link.
  * @returns {JSX.Element} The ForgotPasswordPage component.
  */
@@ -15,27 +16,39 @@ const ForgotPasswordPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [form] = Form.useForm();
+  const [email, setEmail] = useState("");
 
   /**
    * Handles the form submission for the forgot password request.
-   * @param {{ email: string }} values - The form values containing the user's email.
    */
-  const handleForgotPasswordSubmit = async (values: { email: string }) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(null);
 
+    // Validation
+    if (!email) {
+      message.error("Please input your Email!");
+      setLoading(false);
+      return;
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      message.error("The input is not valid E-mail!");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // Direct fetch call (replace with your actual API client if available)
       const response = await fetch(
         "http://localhost:5000/api/v1/auth/forgot-password",
         {
-          // Assuming Flask runs on port 5000
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ email: values.email }),
+          body: JSON.stringify({ email }),
         }
       );
 
@@ -47,12 +60,11 @@ const ForgotPasswordPage: React.FC = () => {
         );
       }
 
-      // Assume success for now
       setSuccess(
         result.message ||
           "If an account exists for this email, a password reset link has been sent."
       );
-      form.resetFields();
+      setEmail("");
     } catch (err: any) {
       console.error("Forgot password error:", err);
       setError(
@@ -80,46 +92,63 @@ const ForgotPasswordPage: React.FC = () => {
           Enter your email address below, and we'll send you a link to reset
           your password.
         </p>
-        <Form
-          form={form}
-          name="forgot_password"
-          onFinish={handleForgotPasswordSubmit}
-          layout="vertical"
-          requiredMark={false}
-        >
-          <Form.Item
-            name="email"
-            label="Email Address"
-            rules={[
-              { required: true, message: "Please input your Email!" },
-              { type: "email", message: "The input is not valid E-mail!" },
-            ]}
-          >
-            <Input prefix={<MailOutlined />} placeholder="Email" />
-          </Form.Item>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              htmlFor="forgot_email"
+              style={{ display: "block", marginBottom: "8px", fontWeight: 500 }}
+            >
+              Email Address
+            </label>
+            <Input
+              id="forgot_email"
+              prefix={<MailOutlined />}
+              placeholder="Email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError(null);
+                if (success) setSuccess(null);
+              }}
+              size="large"
+              type="email"
+            />
+          </div>
 
           {error && (
-            <Form.Item>
-              <Alert message={error} type="error" showIcon />
-            </Form.Item>
+            <Alert
+              message={error}
+              type="error"
+              showIcon
+              style={{ marginBottom: "16px" }}
+            />
           )}
 
           {success && (
-            <Form.Item>
-              <Alert message={success} type="success" showIcon />
-            </Form.Item>
+            <Alert
+              message={success}
+              type="success"
+              showIcon
+              style={{ marginBottom: "16px" }}
+            />
           )}
 
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading} block>
+          <div style={{ marginBottom: "16px" }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={loading}
+              block
+              size="large"
+            >
               Send Reset Link
             </Button>
-          </Form.Item>
+          </div>
 
-          <Form.Item style={{ textAlign: "center" }}>
-            <a href="/login">Back to Login</a>
-          </Form.Item>
-        </Form>
+          <div style={{ textAlign: "center" }}>
+            <Link to="/login">Back to Login</Link>
+          </div>
+        </form>
       </Card>
     </div>
   );

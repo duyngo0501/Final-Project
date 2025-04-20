@@ -1,12 +1,13 @@
-import React from "react";
-import { Form, Input, Row, Col, DatePicker } from "antd";
+import React, { useState } from "react";
+import { Input, Row, Col, DatePicker, message } from "antd";
+import type { Dayjs } from "dayjs";
 
 /**
  * @description Interface for credit card form values.
  */
 export interface CreditCardValues {
   cardNumber: string;
-  expiryDate: string; // Store as MM/YY string or handle Moment object
+  expiryDate: string; // Store as MM/YY string
   cvc: string;
   nameOnCard: string;
 }
@@ -15,25 +16,45 @@ export interface CreditCardValues {
  * @description Props for the CreditCardForm component.
  */
 interface CreditCardFormProps {
-  // We don't need initialValues or onSubmit for this placeholder version
-  // Add props later if it needs to interact (e.g., for validation state)
+  // Keep props minimal for now, add if needed for parent interaction
+  // e.g., onValuesChange?: (values: Partial<CreditCardValues>) => void;
 }
 
 /**
- * @description A placeholder form component for entering credit card details.
+ * @description A placeholder form component for entering credit card details using useState.
  * Contains basic fields but no validation or submission logic.
+ * State is managed internally; parent interaction might require additional props.
  * @param {CreditCardFormProps} props Component props.
  * @returns {React.FC<CreditCardFormProps>} The CreditCardForm component.
  */
 const CreditCardForm: React.FC<CreditCardFormProps> = (props) => {
-  const [form] = Form.useForm();
+  // Removed Form.useForm();
+
+  // State for form fields
+  const [nameOnCard, setNameOnCard] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
+  const [expiryDate, setExpiryDate] = useState<Dayjs | null>(null); // Use Dayjs for DatePicker state
+  const [cvc, setCvc] = useState("");
+
+  // --- Optional: Handler to notify parent of changes ---
+  // useEffect(() => {
+  //   if (props.onValuesChange) {
+  //     props.onValuesChange({
+  //        nameOnCard,
+  //        cardNumber,
+  //        expiryDate: expiryDate ? expiryDate.format("MM/YY") : "",
+  //        cvc
+  //     });
+  //   }
+  // }, [nameOnCard, cardNumber, expiryDate, cvc, props.onValuesChange]);
+  // -----------------------------------------------------
+
+  // This component doesn't have its own submit, parent handles it.
+  // We can add internal validation display if needed.
 
   return (
-    <Form
-      form={form}
-      layout="vertical"
-      name="credit_card_details"
-      requiredMark="optional"
+    /* Use a simple div wrapper instead of Form */
+    <div
       style={{
         marginTop: 20,
         padding: "20px 15px",
@@ -41,54 +62,63 @@ const CreditCardForm: React.FC<CreditCardFormProps> = (props) => {
         borderRadius: "4px",
       }}
     >
-      <Form.Item
-        name="nameOnCard"
-        label="Name on Card"
-        rules={[
-          { required: true, message: "Please enter the name on the card" },
-        ]}
-      >
-        <Input placeholder="Enter name as it appears on card" />
-      </Form.Item>
+      {/* Name on Card */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ display: "block", marginBottom: "8px" }}>
+          Name on Card
+        </label>
+        <Input
+          placeholder="Enter name as it appears on card"
+          value={nameOnCard}
+          onChange={(e) => setNameOnCard(e.target.value)}
+        />
+      </div>
 
-      <Form.Item
-        name="cardNumber"
-        label="Card Number"
-        rules={[{ required: true, message: "Please enter your card number" }]}
-      >
-        <Input placeholder="Enter 16-digit card number" />
-      </Form.Item>
+      {/* Card Number */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ display: "block", marginBottom: "8px" }}>
+          Card Number
+        </label>
+        <Input
+          placeholder="Enter 16-digit card number"
+          value={cardNumber}
+          onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, ""))} // Allow only digits
+          maxLength={16} // Basic length check
+        />
+      </div>
 
       <Row gutter={16}>
         <Col xs={12} sm={12}>
-          <Form.Item
-            name="expiryDate"
-            label="Expiry Date"
-            rules={[
-              { required: true, message: "Please enter the expiry date" },
-            ]}
-          >
-            {/* Using DatePicker for simplicity, format might need adjustment */}
+          {/* Expiry Date */}
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", marginBottom: "8px" }}>
+              Expiry Date
+            </label>
             <DatePicker
               picker="month"
               format="MM/YY"
               style={{ width: "100%" }}
               placeholder="MM/YY"
+              value={expiryDate}
+              onChange={(date) => setExpiryDate(date)} // date is Dayjs | null
             />
-          </Form.Item>
+          </div>
         </Col>
         <Col xs={12} sm={12}>
-          <Form.Item
-            name="cvc"
-            label="CVC"
-            rules={[{ required: true, message: "Please enter the CVC code" }]}
-          >
-            <Input placeholder="Enter 3 or 4 digit CVC" />
-          </Form.Item>
+          {/* CVC */}
+          <div style={{ marginBottom: "16px" }}>
+            <label style={{ display: "block", marginBottom: "8px" }}>CVC</label>
+            <Input
+              placeholder="Enter 3 or 4 digit CVC"
+              value={cvc}
+              onChange={(e) => setCvc(e.target.value.replace(/\D/g, ""))} // Allow only digits
+              maxLength={4}
+            />
+          </div>
         </Col>
       </Row>
-      {/* This form doesn't submit on its own; data is collected by parent */}
-    </Form>
+      {/* No submit button, as parent likely handles submission */}
+    </div>
   );
 };
 
