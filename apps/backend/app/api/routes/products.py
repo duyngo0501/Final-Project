@@ -1,19 +1,18 @@
-from fastapi import APIRouter, Query, HTTPException, Depends, status
-from typing import Optional, List
 import uuid
 
-# Assuming schemas are defined in app.schemas.product
-from app.schemas.product import Product, ProductListingResponse 
-from app.schemas.custom_game import CustomGameCreate, CustomGamePublic
+from fastapi import APIRouter, HTTPException, Query, status
 
-# Models (for type hinting in dependencies)
-from app.models.custom_game import CustomGame
+# Dependencies
+from app.api.deps import AdminUser, SessionDep  # Import SessionDep and AdminUser
 
 # CRUD
 from app.crud import crud_custom_game
 
-# Dependencies
-from app.api.deps import SessionDep, AdminUser # Import SessionDep and AdminUser
+# Models (for type hinting in dependencies)
+from app.schemas.custom_game import CustomGameCreate, CustomGamePublic
+
+# Assuming schemas are defined in app.schemas.product
+from app.schemas.product import ProductListingResponse
 
 router = APIRouter()
 

@@ -1,6 +1,7 @@
+from typing import Any
+
 from gotrue import User, UserAttributes  # type: ignore
 from pydantic import BaseModel, Field
-from typing import Dict, Any
 
 
 # Shared properties
@@ -12,8 +13,8 @@ class Token(BaseModel):
 # request
 class UserIn(Token, User):  # type: ignore
     # Attempt to capture metadata which might contain role info
-    app_metadata: Dict[str, Any] = Field(default_factory=dict)
-    user_metadata: Dict[str, Any] = Field(default_factory=dict)
+    app_metadata: dict[str, Any] = Field(default_factory=dict)
+    user_metadata: dict[str, Any] = Field(default_factory=dict)
 
     pass
 

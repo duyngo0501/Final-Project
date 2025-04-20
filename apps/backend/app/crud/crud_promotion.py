@@ -1,8 +1,8 @@
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Optional, Sequence
 
-from sqlmodel import Session, SQLModel, select, update
+from sqlmodel import Session, select
 
 from app.models.promotion import Promotion
 from app.schemas.promotion import PromotionCreate, PromotionUpdate
@@ -14,12 +14,12 @@ class CRUDPromotion:
     def __init__(self, model: type[Promotion]):
         self.model = model
 
-    def get(self, session: Session, *, id: uuid.UUID) -> Optional[Promotion]:
+    def get(self, session: Session, *, id: uuid.UUID) -> Promotion | None:
         """Get a single promotion by id."""
         statement = select(self.model).where(self.model.id == id)
         return session.exec(statement).one_or_none()
 
-    def get_by_code(self, session: Session, *, code: str) -> Optional[Promotion]:
+    def get_by_code(self, session: Session, *, code: str) -> Promotion | None:
         """Get a single promotion by its unique code."""
         statement = select(self.model).where(self.model.code == code)
         return session.exec(statement).one_or_none()
@@ -39,9 +39,9 @@ class CRUDPromotion:
         statement = (
             select(self.model)
             .where(
-                self.model.is_active == True,
-                (self.model.start_date == None) | (self.model.start_date <= now),
-                (self.model.end_date == None) | (self.model.end_date >= now),
+                self.model.is_active,
+                (self.model.start_date is None) | (self.model.start_date <= now),
+                (self.model.end_date is None) | (self.model.end_date >= now),
             )
             .offset(skip)
             .limit(limit)
@@ -65,7 +65,7 @@ class CRUDPromotion:
 
     def update(
         self, session: Session, *, id: uuid.UUID, obj_in: PromotionUpdate
-    ) -> Optional[Promotion]:
+    ) -> Promotion | None:
         """Update an existing promotion."""
         db_obj = self.get(session, id=id)
         if not db_obj:
@@ -85,7 +85,7 @@ class CRUDPromotion:
         session.refresh(db_obj)
         return db_obj
 
-    def remove(self, session: Session, *, id: uuid.UUID) -> Optional[Promotion]:
+    def remove(self, session: Session, *, id: uuid.UUID) -> Promotion | None:
         """Remove a promotion."""
         obj = self.get(session, id=id)
         if obj:

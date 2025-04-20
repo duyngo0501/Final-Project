@@ -11,9 +11,6 @@ from .custom_game import CustomGame # noqa F401
 # Example: Import models to make them easily accessible
 from .base import InDBBase as Base # Import the correct class, alias as Base if needed elsewhere
 # from .user import User # Assuming you have a User model - REMOVED
-from .item import Item # Assuming you have an Item model
-from .cart import Cart, CartItem # Assuming Cart models
-from .promotion import Promotion # Add the new Promotion model
 
 # You might want to define __all__ if you prefer explicit exports
 __all__ = [

@@ -11,19 +11,18 @@ from uvicorn.config import LOGGING_CONFIG
 from app.api.main import api_router
 from app.core.config import Settings
 from app.core.middleware import TracebackMiddleware
+
 from .utils import custom_generate_unique_id
-# Refactor imports to use __init__.py exports
-from app.api.routes import (
-    items_router,
-    utils_router,
-    # carts_router, # Still removed
-    promotions_router,
-    products_router,
-    orders_router # Import the new orders router
-)
-# Remove individual module imports if no longer needed elsewhere
-# from app.api.routes import items, utils, carts, promotions 
-# from app.api.routes import products 
+
+# Remove individual router imports
+# from app.api.routes import (
+#     items_router,
+#     utils_router,
+#     # carts_router, # Still removed
+#     promotions_router,
+#     products_router,
+#     orders_router # Import the new orders router
+# )
 
 # Instantiate settings here for the app
 settings = Settings()
@@ -63,15 +62,8 @@ if settings.all_cors_origins:
     )
 
 
-# Include the routers using the new variable names
-# Keep login first
-# app.include_router(health.router, prefix="/health", tags=["Health"]) # Still removed
-app.include_router(utils_router, prefix="/utils", tags=["Utils"])
-app.include_router(items_router, prefix="/items", tags=["Items"])
-# app.include_router(carts.router, prefix="/carts", tags=["Carts"]) # Still removed
-app.include_router(promotions_router, prefix="/promotions", tags=["Promotions"])
-app.include_router(products_router, prefix="/products", tags=["Products"])
-app.include_router(orders_router, prefix="/orders", tags=["Orders"]) # Include the new router
+# Include the main aggregated router with API version prefix
+app.include_router(api_router, prefix=settings.API_V1_STR) # e.g., prefix="/api/v1"
 
 
 @app.get("/", tags=["root"])

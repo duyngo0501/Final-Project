@@ -243,7 +243,8 @@ export const useGames = (params: UseGamesParams = {}) => {
     searchTerm
   )}&sortBy=${sortBy}&currentPage=${currentPage}&pageSize=${pageSize}`;
 
-  const { data, error, isLoading } = useSWR<MockFetcherResponse>(
+  // Destructure mutate from useSWR result
+  const { data, error, isLoading, mutate } = useSWR<MockFetcherResponse>(
     key,
     mockFetcher,
     {
@@ -257,5 +258,6 @@ export const useGames = (params: UseGamesParams = {}) => {
     totalGames: data?.totalGames, // Return the total count for pagination
     isLoading,
     isError: error,
+    mutate, // Return the mutate function
   };
 };

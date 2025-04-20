@@ -1,17 +1,16 @@
 import uuid
-from typing import Optional
 
 from sqlmodel import Session, select
 
 from app.crud.base import CRUDBase
 from app.models.cart import Cart, CartItem
-from app.schemas.cart import CartCreate, CartUpdate, CartItemCreate, CartItemUpdate
+from app.schemas.cart import CartCreate, CartItemCreate, CartItemUpdate, CartUpdate
 
 
 class CRUDCart(CRUDBase[Cart, CartCreate, CartUpdate]):
     """CRUD operations for Cart model."""
 
-    def get_by_owner(self, session: Session, *, owner_id: uuid.UUID) -> Optional[Cart]:
+    def get_by_owner(self, session: Session, *, owner_id: uuid.UUID) -> Cart | None:
         """Gets the cart for a specific owner.
 
         Args:
@@ -52,7 +51,7 @@ class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
         *,
         cart_id: uuid.UUID,
         product_id: uuid.UUID,
-    ) -> Optional[CartItem]:
+    ) -> CartItem | None:
         """Gets a specific item within a specific cart.
 
         Args:
@@ -105,7 +104,7 @@ class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
         cart_id: uuid.UUID,
         product_id: uuid.UUID,
         item_in: CartItemUpdate,
-    ) -> Optional[CartItem]:
+    ) -> CartItem | None:
         """Updates the quantity of a specific item in a cart.
 
         Args:
@@ -129,7 +128,7 @@ class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
 
     def remove_item(
         self, session: Session, *, cart_id: uuid.UUID, product_id: uuid.UUID
-    ) -> Optional[CartItem]:
+    ) -> CartItem | None:
         """Removes a specific item from a cart.
 
         Args:

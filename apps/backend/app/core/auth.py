@@ -3,11 +3,11 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
-from supabase import AsyncClientOptions
-from supabase._async.client import AsyncClient, create_client
 
 from app.core.config import settings
 from app.schemas.auth import UserIn
+from supabase import AsyncClientOptions
+from supabase._async.client import AsyncClient, create_client
 
 
 async def get_super_client() -> AsyncClient:

@@ -1,7 +1,6 @@
+import enum
 import uuid
 from datetime import datetime
-from typing import Optional
-import enum
 
 from pydantic import BaseModel, Field, validator
 
@@ -15,11 +14,11 @@ class DiscountType(str, enum.Enum):
 class PromotionBase(BaseModel):
     """Shared base properties for a promotion."""
     code: str = Field(..., max_length=100, description="Unique promotion code (e.g., SUMMER20)")
-    description: Optional[str] = Field(None, max_length=255, description="Description of the promotion")
+    description: str | None = Field(None, max_length=255, description="Description of the promotion")
     discount_type: DiscountType = Field(default=DiscountType.PERCENTAGE, description="Type of discount")
     discount_value: float = Field(..., gt=0, description="Value of the discount (percentage or fixed amount)")
-    start_date: Optional[datetime] = Field(None, description="When the promotion becomes active")
-    end_date: Optional[datetime] = Field(None, description="When the promotion expires")
+    start_date: datetime | None = Field(None, description="When the promotion becomes active")
+    end_date: datetime | None = Field(None, description="When the promotion expires")
     is_active: bool = Field(True, description="Whether the promotion is currently active")
 
     @validator('end_date')
@@ -37,13 +36,13 @@ class PromotionCreate(PromotionBase):
 
 class PromotionUpdate(BaseModel):
     """Properties to receive via API on update (all optional)."""
-    code: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = Field(None, max_length=255)
-    discount_type: Optional[DiscountType] = None
-    discount_value: Optional[float] = Field(None, gt=0)
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    is_active: Optional[bool] = None
+    code: str | None = Field(None, max_length=100)
+    description: str | None = Field(None, max_length=255)
+    discount_type: DiscountType | None = None
+    discount_value: float | None = Field(None, gt=0)
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    is_active: bool | None = None
 
     @validator('end_date')
     def end_date_must_be_after_start_date_optional(cls, v, values):

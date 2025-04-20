@@ -1,6 +1,7 @@
-from sqlmodel import Session, select
-from slugify import slugify # Assuming slugify library is installed or available
 import uuid
+
+from slugify import slugify  # Assuming slugify library is installed or available
+from sqlmodel import Session, select
 
 from app.models.custom_game import CustomGame
 from app.schemas.custom_game import CustomGameCreate

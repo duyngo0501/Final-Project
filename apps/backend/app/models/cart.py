@@ -1,11 +1,11 @@
 import uuid
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     # Avoid circular imports for type hinting
-    from app.models.user import User # Assuming product model is separate
+    pass  # Assuming product model is separate
     # from app.models.product import Product # Assuming product model is separate
 
 
@@ -45,5 +45,5 @@ class Cart(SQLModel, table=True):
     owner_supabase_id: uuid.UUID = Field(index=True, nullable=False, unique=True) # Assuming one cart per user
 
     # Relationships
-    items: List["CartItem"] = Relationship(back_populates="cart", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    items: list["CartItem"] = Relationship(back_populates="cart", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     # owner: "User" = Relationship() # Define relationship to User if needed elsewhere 

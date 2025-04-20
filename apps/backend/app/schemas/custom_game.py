@@ -1,6 +1,5 @@
 import uuid
 from datetime import date
-from typing import Optional
 
 from pydantic import BaseModel, HttpUrl
 
@@ -10,9 +9,9 @@ from pydantic import BaseModel, HttpUrl
 # Assume slug is generated from name automatically later
 class CustomGameBase(BaseModel):
     name: str
-    description: Optional[str] = None
-    released: Optional[date] = None
-    background_image: Optional[HttpUrl] = None
+    description: str | None = None
+    released: date | None = None
+    background_image: HttpUrl | None = None
 
 class CustomGameCreate(CustomGameBase):
     # You might require certain fields during creation

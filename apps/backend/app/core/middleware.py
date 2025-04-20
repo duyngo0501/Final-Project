@@ -17,7 +17,7 @@ class TracebackMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
             return response
-        except Exception as exc:
+        except Exception:
             traceback_str = traceback.format_exc()
             print(f"Unhandled exception: {traceback_str}") # Optional: log to server console
             return PlainTextResponse(traceback_str, status_code=500) 

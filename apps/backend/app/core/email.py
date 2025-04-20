@@ -1,6 +1,7 @@
-import resend
-import os
 import logging
+import os
+
+import resend
 
 logger = logging.getLogger(__name__)
 

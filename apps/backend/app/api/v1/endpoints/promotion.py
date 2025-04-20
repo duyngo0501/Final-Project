@@ -1,8 +1,8 @@
-from typing import Sequence
+from collections.abc import Sequence
 
 from fastapi import APIRouter, Depends, Query
 
-from app.api.deps import SessionDep, CurrentUser # Need CurrentUser for auth
+from app.api.deps import CurrentUser, SessionDep  # Need CurrentUser for auth
 from app.crud import crud_promotion
 from app.schemas.promotion import Promotion
 

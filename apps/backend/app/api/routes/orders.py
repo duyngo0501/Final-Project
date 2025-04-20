@@ -1,18 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List
 import logging
 from datetime import datetime
 
-# Schemas
-from app.schemas.order import OrderCreate, OrderResponse, OrderItemCreate # Assuming these exist
-# Models
-from app.models.order import Order, OrderItem # Assuming these exist
-from app.models.item import Item # To get item details like price
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
 # Database Dependency
-from app.database import get_db # Assuming get_db dependency
+from app.core.db import get_db  # Assuming get_db is defined in app/core/db.py
+
 # Email Utility
 from app.core.email import send_order_confirmation_email
+
+# Models
+from app.models.order import Order, OrderItem  # Assuming these exist
+
+# Schemas
+from app.schemas.order import (  # Assuming these exist
+    OrderCreate,
+    OrderItemCreate,
+    OrderResponse,
+)
+
 # Auth Dependency (Optional - adjust based on auth requirements)
 # from app.auth.dependencies import get_current_user, User 
 
@@ -20,7 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Placeholder for cart fetching/clearing logic - Replace with actual implementation
-async def get_cart_items_for_user(user_id: int, db: Session) -> List[dict]:
+async def get_cart_items_for_user(user_id: int, db: Session) -> list[dict]:
     # Example: Fetch from a Cart model linked to the user
     logger.warning(f"Placeholder: Fetching cart items for user {user_id}")
     # Replace with actual cart fetching logic. Return list of dicts like {'item_id': 1, 'quantity': 2}
@@ -38,7 +45,8 @@ def format_currency(amount: float) -> str:
     # Simple Vietnamese Dong formatting - replace with a robust library if needed
     try:
         return f"{int(amount):,}đ".replace(",", ".")
-    except:
+    except ValueError:  # Catch specific error if amount cannot be converted to int
+        # Fallback for non-integer amounts or formatting errors
         return f"{amount}đ"
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -73,8 +81,8 @@ async def place_order(
 
     # --- 3. Calculate Total & Prepare Order Items --- 
     total_amount = 0.0
-    order_items_to_create: List[OrderItem] = []
-    email_items_list: List[str] = []
+    order_items_to_create: list[OrderItem] = []
+    email_items_list: list[str] = []
     item_index = 1
 
     # It's better to fetch current prices from DB than trust cart data completely

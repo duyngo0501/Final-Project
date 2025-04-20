@@ -1,9 +1,9 @@
 from collections.abc import Generator
 
-from sqlmodel import Session, create_engine, select
-from supabase import create_client
+from sqlmodel import Session, create_engine
 
 from app.core.config import settings
+
 # from app.models import User # Remove this import - User model was deleted
 
 # make sure all SQLModel models are imported (app.models) before initializing DB

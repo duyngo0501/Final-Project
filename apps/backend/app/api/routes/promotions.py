@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
-from typing import List, Optional
 
-from app.schemas.promotion import PromotionCreate, PromotionUpdate, PromotionResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
+# Import the correct Admin dependency from deps.py
+from app.api.deps import AdminUser  # Import AdminUser and SessionDep
+from app.core.db import get_db  # Assuming get_db is defined in app/core/db.py
 from app.models.promotion import Promotion
-from app.database import get_db # Assuming get_db dependency
-# Assuming an auth dependency that verifies admin role
-from app.auth.dependencies import admin_required 
-from app.models.user import User # Needed for the dependency
+from app.schemas.promotion import PromotionCreate, PromotionResponse, PromotionUpdate
+
+# Remove incorrect import
+# from app.auth.dependencies import admin_required 
+# from app.models.user import User # User model now likely comes via AdminUser/CurrentUser
 
 router = APIRouter()
 
@@ -15,14 +18,17 @@ router = APIRouter()
     "/", 
     response_model=PromotionResponse, 
     status_code=status.HTTP_201_CREATED, 
-    dependencies=[Depends(admin_required)] # Protect endpoint
+    # Use the AdminUser dependency
+    # dependencies=[Depends(admin_required)] # Old way
 )
 def create_promotion(
     promotion_in: PromotionCreate, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), # Or use db: SessionDep
+    current_admin_user: AdminUser = Depends() # Inject admin user
 ):
     """
     Create a new promotion (Admin only).
+    Requires admin privileges verified by AdminUser dependency.
     """
     # Check if code already exists
     existing_promotion = db.query(Promotion).filter(Promotion.code == promotion_in.code).first()
@@ -38,11 +44,11 @@ def create_promotion(
     db.refresh(db_promotion)
     return db_promotion
 
-@router.get("/", response_model=List[PromotionResponse])
+@router.get("/", response_model=list[PromotionResponse])
 def read_promotions(
     skip: int = 0,
     limit: int = 100, 
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     db: Session = Depends(get_db)
 ):
     """
@@ -71,15 +77,18 @@ def read_promotion(
 @router.put(
     "/{promotion_id}", 
     response_model=PromotionResponse, 
-    dependencies=[Depends(admin_required)] # Protect endpoint
+    # Use the AdminUser dependency
+    # dependencies=[Depends(admin_required)] # Old way
 )
 def update_promotion(
     promotion_id: int, 
     promotion_in: PromotionUpdate, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), # Or use db: SessionDep
+    current_admin_user: AdminUser = Depends() # Inject admin user
 ):
     """
     Update an existing promotion (Admin only).
+    Requires admin privileges verified by AdminUser dependency.
     """
     db_promotion = db.query(Promotion).filter(Promotion.id == promotion_id).first()
     if db_promotion is None:
@@ -105,14 +114,17 @@ def update_promotion(
 @router.delete(
     "/{promotion_id}", 
     status_code=status.HTTP_204_NO_CONTENT, 
-    dependencies=[Depends(admin_required)] # Protect endpoint
+    # Use the AdminUser dependency
+    # dependencies=[Depends(admin_required)] # Old way
 )
 def delete_promotion(
     promotion_id: int, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), # Or use db: SessionDep
+    current_admin_user: AdminUser = Depends() # Inject admin user
 ):
     """
     Delete a promotion (Admin only).
+    Requires admin privileges verified by AdminUser dependency.
     """
     db_promotion = db.query(Promotion).filter(Promotion.id == promotion_id).first()
     if db_promotion is None:
