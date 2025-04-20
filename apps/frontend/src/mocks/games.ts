@@ -1,0 +1,156 @@
+import { Game } from "@/types/game";
+
+// Centralized dummy game data - NOW WITH MORE CATS!
+export const dummyGames: Game[] = [
+  {
+    id: 101,
+    title: "Cyberpunk 2077",
+    thumbnail: "https://cataas.com/cat/says/game-101?width=300&height=180",
+    price: 59.99,
+    category: "pc",
+    discountedPrice: 29.99,
+    description: "An open-world, action-adventure story set in Night City.",
+  },
+  {
+    id: 102,
+    title: "Elden Ring",
+    thumbnail: "https://cataas.com/cat/says/game-102?width=300&height=180",
+    price: 69.99,
+    category: "console",
+    description:
+      "Rise, Tarnished, and be guided by grace to brandish the power of the Elden Ring.",
+  },
+  {
+    id: 103,
+    title: "Stardew Valley",
+    thumbnail: "https://cataas.com/cat/says/game-103?width=300&height=180",
+    price: 14.99,
+    category: "pc",
+    description: "You've inherited your grandfather's old farm plot...",
+  },
+  {
+    id: 104,
+    title: "Genshin Impact",
+    thumbnail: "https://cataas.com/cat/says/game-104?width=300&height=180",
+    price: 0,
+    category: "mobile",
+    description: "Step into a vast magical world for adventure.",
+  },
+  {
+    id: 105,
+    title: "Red Dead Redemption 2",
+    thumbnail: "https://cataas.com/cat/says/game-105?width=300&height=180",
+    price: 49.99,
+    category: "console",
+    description: "America, 1899. The end of the wild west era has begun.",
+  },
+  {
+    id: 106,
+    title: "Among Us",
+    thumbnail: "https://cataas.com/cat/says/game-106?width=300&height=180",
+    price: 4.99,
+    category: "mobile",
+    description: "An online multiplayer game of teamwork and betrayal.",
+  },
+  {
+    id: 107,
+    title: "Doom Eternal",
+    thumbnail: "https://cataas.com/cat/says/game-107?width=300&height=180",
+    price: 39.99,
+    category: "pc",
+    description: "Hell's armies have invaded Earth. Become the Slayer...",
+  },
+  {
+    id: 108,
+    title: "Zelda: Tears of the Kingdom",
+    thumbnail: "https://cataas.com/cat/says/game-108?width=300&height=180",
+    price: 69.99,
+    category: "console",
+    description:
+      "An epic adventure across the land and skies of Hyrule awaits.",
+  },
+  {
+    id: 109,
+    title: "Hades",
+    thumbnail: "https://cataas.com/cat/says/game-109?width=300&height=180",
+    price: 24.99,
+    category: "pc",
+    description:
+      "Defy the god of the dead as you hack and slash out of the Underworld.",
+  },
+  {
+    id: 110,
+    title: "Hollow Knight",
+    thumbnail: "https://cataas.com/cat/says/game-110?width=300&height=180",
+    price: 14.99,
+    category: "console",
+    description: "Explore twisting caverns, ancient cities and deadly wastes.",
+  },
+  {
+    id: 111,
+    title: "Factorio",
+    thumbnail: "https://cataas.com/cat/says/game-111?width=300&height=180",
+    price: 30.0,
+    category: "pc",
+    description: "Build and maintain factories. Automate everything!",
+  },
+  {
+    id: 112,
+    title: "Pokemon GO",
+    thumbnail: "https://cataas.com/cat/says/game-112?width=300&height=180",
+    price: 0,
+    category: "mobile",
+    description: "Discover Pokémon in the real world!",
+  },
+  {
+    id: 113,
+    title: "Grand Theft Auto V",
+    thumbnail: "https://cataas.com/cat/says/game-113?width=300&height=180",
+    price: 29.99,
+    category: "console",
+    description: "Explore the stunning world of Los Santos and Blaine County.",
+  },
+  {
+    id: 114,
+    title: "Terraria",
+    thumbnail: "https://cataas.com/cat/says/game-114?width=300&height=180",
+    price: 9.99,
+    category: "pc",
+    description:
+      "Dig, fight, explore, build! The very world is at your fingertips.",
+  },
+  {
+    id: 115,
+    title: "Call of Duty: Mobile",
+    thumbnail: "https://cataas.com/cat/says/game-115?width=300&height=180",
+    price: 0,
+    category: "mobile",
+    description:
+      "Experience the iconic first-person shooter franchise on mobile.",
+  },
+  {
+    id: 116,
+    title: "The Witcher 3: Wild Hunt",
+    thumbnail: "https://cataas.com/cat/says/game-116?width=300&height=180",
+    price: 39.99,
+    category: "pc",
+    description: "Become a professional monster slayer, Geralt of Rivia.",
+  },
+  {
+    id: 117,
+    title: "Bloodborne",
+    thumbnail: "https://cataas.com/cat/says/game-117?width=300&height=180",
+    price: 19.99,
+    category: "console",
+    description: "Hunt your nightmares in the ancient city of Yharnam.",
+  },
+  {
+    id: 118,
+    title: "RimWorld",
+    thumbnail: "https://cataas.com/cat/says/game-118?width=300&height=180", // Was already a cat!
+    price: 34.99,
+    category: "pc",
+    description: "A sci-fi colony sim driven by an intelligent AI storyteller.",
+  },
+  // Add more mock games as needed - they will now default to cats if added here!
+];

@@ -1,15 +1,8 @@
-import React, { useEffect } from "react";
-import { Form, Input, Select, Button, Space } from "antd";
+import React, { useState, useEffect } from "react";
+import { Input, Select, Button, Space, message } from "antd";
 
-// Reusing User type definition idea from AdminUsersPage
-// TODO: Centralize this type
-interface User {
-  id?: string | number; // ID is optional for add
-  username: string;
-  email: string;
-  role: "admin" | "user";
-  password?: string; // Password optional, especially for edit
-}
+// TODO: Centralize this type (assuming it exists in @/types/user)
+import { User } from "@/types/user";
 
 const { Option } = Select;
 
@@ -27,129 +20,188 @@ export interface UserFormValues {
  * @description Props for the UserForm component.
  */
 interface UserFormProps {
-  initialValues?: Partial<User>; // Can be partial for add, password excluded for edit
-  isEditing: boolean; // Flag to differentiate between Add and Edit modes
-  onFinish: (values: UserFormValues) => Promise<void> | void; // Can be async
+  initialValues?: Partial<User>;
+  isEditing: boolean;
+  onFinish: (values: UserFormValues) => Promise<void> | void;
   onCancel?: () => void;
   isLoading?: boolean;
-  formInstance?: any;
 }
 
 /**
- * @description A reusable form component for adding or editing user details.
+ * @description A reusable form component for adding or editing user details using useState.
  * @param {UserFormProps} props Component props.
  * @returns {React.FC<UserFormProps>} The UserForm component.
  */
 const UserForm: React.FC<UserFormProps> = ({
-  initialValues,
+  initialValues = {},
   isEditing,
   onFinish,
   onCancel,
   isLoading = false,
-  formInstance,
 }) => {
-  const [form] = Form.useForm(formInstance);
+  // State for form fields
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"user" | "admin">("user"); // Default role
 
   // Reset fields when initialValues change or mode changes
   useEffect(() => {
     if (initialValues && isEditing) {
-      // For editing, set values BUT EXCLUDE password
-      form.setFieldsValue({ ...initialValues, password: "" });
+      setUsername(initialValues.username || "");
+      setEmail(initialValues.email || "");
+      setRole(initialValues.role || "user");
+      setPassword(""); // Always clear password field for edit form
     } else {
       // For adding, reset everything
-      form.resetFields();
+      setUsername("");
+      setEmail("");
+      setPassword("");
+      setRole("user");
     }
-  }, [initialValues, isEditing, form]);
+  }, [initialValues, isEditing]);
 
   /**
-   * @description Handles form submission after validation.
-   * @param {UserFormValues} values The validated form values.
+   * @description Handles form submission and validation.
    */
-  const handleFinish = (values: UserFormValues) => {
-    console.log("User Form Submitted:", values);
-    // Remove password field if it's empty (especially for edit)
-    const finalValues = { ...values };
-    if (!finalValues.password) {
-      delete finalValues.password;
-    }
-    onFinish(finalValues);
-  };
+  const handleSubmit =
+    async (/* event?: React.FormEvent<HTMLFormElement> */) => {
+      // If triggered by an external button (like Modal Ok), event might not be passed.
+      // event?.preventDefault();
+
+      // --- Validation ---
+      if (!username.trim()) {
+        message.error("Please enter a username");
+        return;
+      }
+      if (!email.trim()) {
+        message.error("Please enter an email address");
+        return;
+      }
+      if (!/\S+@\S+\.\S+/.test(email)) {
+        message.error("Please enter a valid email address");
+        return;
+      }
+      // Password validation: required for adding, minimum length if provided
+      if (!isEditing && !password) {
+        message.error("Password is required for new users");
+        return;
+      }
+      if (password && password.length < 6) {
+        message.error("Password must be at least 6 characters");
+        return;
+      }
+      if (!role) {
+        message.error("Please select a role");
+        return;
+      }
+      // --- End Validation ---
+
+      const finalValues: UserFormValues = {
+        username: username.trim(),
+        email: email.trim(),
+        role,
+      };
+
+      // Only include password if it has been entered
+      if (password) {
+        finalValues.password = password;
+      }
+
+      console.log("User Form Submitted:", finalValues);
+      try {
+        await onFinish(finalValues);
+        // Clearing the form might be handled by the parent modal closing
+      } catch (error) {
+        console.error("Error submitting user form:", error);
+        message.error("Failed to save user details.");
+      }
+    };
 
   return (
-    <Form
-      form={form}
-      layout="vertical"
-      name="user_form"
-      onFinish={handleFinish}
-    >
-      <Form.Item
-        name="username"
-        label="Username"
-        rules={[{ required: true, message: "Please enter a username" }]}
-      >
-        <Input placeholder="Enter username" />
-      </Form.Item>
+    <div>
+      {/* Username */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ display: "block", marginBottom: "8px" }}>
+          Username
+        </label>
+        <Input
+          placeholder="Enter username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          disabled={isLoading}
+        />
+      </div>
 
-      <Form.Item
-        name="email"
-        label="Email Address"
-        rules={[
-          { required: true, message: "Please enter an email address" },
-          { type: "email", message: "Please enter a valid email address" },
-        ]}
-      >
-        <Input placeholder="Enter email address" />
-      </Form.Item>
+      {/* Email */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ display: "block", marginBottom: "8px" }}>
+          Email Address
+        </label>
+        <Input
+          placeholder="Enter email address"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={isLoading}
+          type="email"
+        />
+      </div>
 
-      {/* Password - Required only for Add, optional placeholder for Edit */}
-      <Form.Item
-        name="password"
-        label={
-          isEditing ? "Password (leave blank to keep unchanged)" : "Password"
-        }
-        rules={[
-          {
-            required: !isEditing,
-            message: "Password is required for new users",
-          },
-          // Add complexity rules if needed
-          { min: 6, message: "Password must be at least 6 characters" },
-        ]}
-        // Do not set initialValue for password on edit
-      >
+      {/* Password */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ display: "block", marginBottom: "8px" }}>
+          {isEditing ? "Password (leave blank to keep unchanged)" : "Password"}
+        </label>
         <Input.Password
           placeholder={
             isEditing
               ? "Leave blank to keep current password"
               : "Enter new password"
           }
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={isLoading}
+          autoComplete="new-password"
         />
-      </Form.Item>
+        {isEditing && !password && (
+          <small style={{ color: "#888" }}>
+            Current password will be retained.
+          </small>
+        )}
+        {password && password.length < 6 && (
+          <small style={{ color: "red" }}>
+            Password must be at least 6 characters.
+          </small>
+        )}
+      </div>
 
-      <Form.Item
-        name="role"
-        label="Role"
-        rules={[{ required: true, message: "Please select a role" }]}
-        initialValue="user" // Default to 'user'
-      >
-        <Select placeholder="Select user role">
+      {/* Role */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={{ display: "block", marginBottom: "8px" }}>Role</label>
+        <Select
+          placeholder="Select user role"
+          value={role}
+          onChange={(value) => setRole(value)}
+          disabled={isLoading}
+          style={{ width: "100%" }}
+        >
           <Option value="user">User</Option>
           <Option value="admin">Admin</Option>
         </Select>
-      </Form.Item>
+      </div>
 
-      {/* Buttons are usually in Modal footer */}
-      {/* 
-       <Form.Item>
-         <Space>
-           <Button onClick={onCancel} disabled={isLoading}>Cancel</Button>
-           <Button type="primary" htmlType="submit" loading={isLoading}>
-             Save User
-           </Button>
-         </Space>
-       </Form.Item>
-       */}
-    </Form>
+      {/* Render buttons here if needed, or rely on parent Modal footer */}
+      <div style={{ marginTop: "24px", textAlign: "right" }}>
+        <Space>
+          <Button onClick={onCancel} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button type="primary" onClick={handleSubmit} loading={isLoading}>
+            {isEditing ? "Save Changes" : "Add User"}
+          </Button>
+        </Space>
+      </div>
+    </div>
   );
 };
 

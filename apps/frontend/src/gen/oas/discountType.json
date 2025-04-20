@@ -1,0 +1,1 @@
+{"type":"string","enum":["percentage","fixed"],"title":"DiscountType","x-readme-ref-name":"DiscountType"}

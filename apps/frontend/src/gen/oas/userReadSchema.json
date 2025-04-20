@@ -1,0 +1,1 @@
+{"properties":{"email":{"anyOf":[{"type":"string","format":"email"},{"type":"null"}],"title":"Email"},"id":{"type":"string","title":"Id"}},"type":"object","required":["id"],"title":"UserReadSchema","description":"Pydantic schema for returning user data to the client.\n\nInherits from UserInDBBaseSchema.","x-readme-ref-name":"UserReadSchema"}

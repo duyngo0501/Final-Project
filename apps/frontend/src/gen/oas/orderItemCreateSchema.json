@@ -1,0 +1,1 @@
+{"properties":{"game_id":{"type":"integer","title":"Game Id"},"quantity":{"type":"integer","title":"Quantity"},"price_at_purchase":{"type":"number","title":"Price At Purchase"}},"type":"object","required":["game_id","quantity","price_at_purchase"],"title":"OrderItemCreateSchema","x-readme-ref-name":"OrderItemCreateSchema"}
