@@ -7,7 +7,8 @@
     "setup": "turbo run setup",
     "list": "node scripts/dev.js list",
     "generate": "node scripts/dev.js generate",
-    "parse-prd": "node scripts/dev.js parse-prd"
+    "parse-prd": "node scripts/dev.js parse-prd",
+    "audit": "PYTHONPATH=. pylint apps/backend --ignore=.venv"
   },
   "devDependencies": {
     "prettier": "^3.5.3",
