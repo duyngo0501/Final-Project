@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING, Optional, List
 
 from sqlmodel import Field, Relationship, SQLModel
 
+# Import the new utility function
+from app.core.utils import generate_custom_id
+
 # Conditional imports for type hinting to avoid circular dependency issues
 if TYPE_CHECKING:
     from .cart import ShoppingCartItem
@@ -51,9 +54,9 @@ class UserItem(SQLModel, table=True):
 
     __tablename__ = "app_users"  # Keep original table name
 
-    # Change id to str, ADD default factory for string UUID
+    # Use generate_custom_id with prefix 'us'
     id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()),
+        default_factory=lambda: generate_custom_id(prefix="us"),
         primary_key=True,
         index=True,
         nullable=False,
