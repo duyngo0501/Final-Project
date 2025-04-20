@@ -12,10 +12,18 @@ from app.api.main import api_router
 from app.core.config import Settings
 from app.core.middleware import TracebackMiddleware
 from .utils import custom_generate_unique_id
+# Refactor imports to use __init__.py exports
 from app.api.routes import (
-    items, utils, carts, promotions # Remove 'carts' from here
+    items_router,
+    utils_router,
+    # carts_router, # Still removed
+    promotions_router,
+    products_router,
+    orders_router # Import the new orders router
 )
-from app.api.routes import products # Add products router import
+# Remove individual module imports if no longer needed elsewhere
+# from app.api.routes import items, utils, carts, promotions 
+# from app.api.routes import products 
 
 # Instantiate settings here for the app
 settings = Settings()
@@ -55,14 +63,15 @@ if settings.all_cors_origins:
     )
 
 
-# Include the routers
+# Include the routers using the new variable names
 # Keep login first
-app.include_router(health.router, prefix="/health", tags=["Health"])
-app.include_router(utils.router, prefix="/utils", tags=["Utils"])
-app.include_router(items.router, prefix="/items", tags=["Items"])
-# app.include_router(carts.router, prefix="/carts", tags=["Carts"]) # Comment out/remove this line
-app.include_router(promotions.router, prefix="/promotions", tags=["Promotions"])
-app.include_router(products.router, prefix="/products", tags=["Products"]) # Include the new router
+# app.include_router(health.router, prefix="/health", tags=["Health"]) # Still removed
+app.include_router(utils_router, prefix="/utils", tags=["Utils"])
+app.include_router(items_router, prefix="/items", tags=["Items"])
+# app.include_router(carts.router, prefix="/carts", tags=["Carts"]) # Still removed
+app.include_router(promotions_router, prefix="/promotions", tags=["Promotions"])
+app.include_router(products_router, prefix="/products", tags=["Products"])
+app.include_router(orders_router, prefix="/orders", tags=["Orders"]) # Include the new router
 
 
 @app.get("/", tags=["root"])
