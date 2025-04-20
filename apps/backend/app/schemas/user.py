@@ -53,11 +53,11 @@ class UserInDBBaseSchema(UserBaseSchema):
     Includes the user ID and email.
 
     Attributes:
-        id (uuid.UUID): The unique identifier for the user.
+        id (str): The unique identifier for the user.
         email (EmailStr | None): The user's email address. Defaults to None.
     """
 
-    id: uuid.UUID
+    id: str
     email: EmailStr | None = None
 
     class Config:
