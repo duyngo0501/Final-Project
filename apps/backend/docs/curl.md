@@ -108,4 +108,67 @@ curl -X DELETE http://localhost:8000/api/v1/cart/items/{product_id} \
 curl -X DELETE http://localhost:8000/api/v1/cart/ \
 -H "Authorization: Bearer YOUR_AUTH_TOKEN"
 ```
+*(Returns 204 No Content on success)*
+
+## Promotion Commands (User - Requires Authentication)
+
+Replace `YOUR_AUTH_TOKEN` with a real token.
+
+**List Active Promotions:**
+```bash
+curl http://localhost:8000/api/v1/promotions/ \
+-H "Authorization: Bearer YOUR_AUTH_TOKEN"
+```
+*(Returns a list of currently active promotions)*
+
+## Promotion Commands (Admin - Requires Admin Authentication)
+
+Replace `YOUR_ADMIN_TOKEN` with a valid token for an admin user and `{promotion_id}` with a real promotion UUID.
+
+**Create Promotion:**
+```bash
+curl -X POST http://localhost:8000/api/v1/admin/promotions/ \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+-d '{
+  "code": "FALLSALE15",
+  "description": "15% off for the fall season",
+  "discount_percentage": 15.0,
+  "start_date": "2024-09-01T00:00:00Z",
+  "end_date": "2024-11-30T23:59:59Z",
+  "is_active": true
+}'
+```
+*(Returns the created promotion)*
+
+**List All Promotions (Admin):**
+```bash
+curl http://localhost:8000/api/v1/admin/promotions/ \
+-H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+*(Returns a list of all promotions)*
+
+**Get Specific Promotion (Admin):**
+```bash
+curl http://localhost:8000/api/v1/admin/promotions/{promotion_id} \
+-H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+*(Returns the specific promotion details)*
+
+**Update Promotion (Admin - e.g., deactivate):**
+```bash
+curl -X PUT http://localhost:8000/api/v1/admin/promotions/{promotion_id} \
+-H "Content-Type: application/json" \
+-H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+-d '{
+  "is_active": false
+}'
+```
+*(Returns the updated promotion)*
+
+**Delete Promotion (Admin):**
+```bash
+curl -X DELETE http://localhost:8000/api/v1/admin/promotions/{promotion_id} \
+-H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
 *(Returns 204 No Content on success)* 

@@ -1,6 +1,6 @@
 {
   "watch": ["app/", ".env"],
-  "ext": "py, toml, lock, Dockerfile, env",
+  "ext": "py, toml, lock, env",
   "ignore": [".venv/", "app/**/__pycache__/"],
-  "exec": "(docker rm -f backend-dev-container || true) && npm run docker:build && docker run --rm --name backend-dev-container -p 8000:8000 --env-file .env -v ./app:/app/app backend-app uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+  "exec": "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 }
