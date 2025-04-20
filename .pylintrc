@@ -1,0 +1,3 @@
+[MAIN]
+# Specify comma-separated regexes matching paths to ignore
+ignore-paths=^\.venv/ 
