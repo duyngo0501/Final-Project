@@ -10,6 +10,12 @@ import RegisterPage from "@/pages/RegisterPage";
 import ProfilePage from "@/pages/ProfilePage";
 import PrivateRoute from "@/components/PrivateRoute";
 import MainLayout from "@/layouts/MainLayout";
+import AdminLayout from "@/layouts/AdminLayout";
+import AdminGamesPage from "@/pages/admin/AdminGamesPage";
+import AdminUsersPage from "@/pages/admin/AdminUsersPage";
+import AdminOrdersPage from "@/pages/admin/AdminOrdersPage";
+import AdminPromotionsPage from "@/pages/admin/AdminPromotionsPage";
+import AdminProtectedRoute from "@/components/auth/AdminProtectedRoute";
 
 /**
  * The main application component.
@@ -44,6 +50,16 @@ function App(): JSX.Element {
               />
               <Route path="login" element={<LoginPage />} />
               <Route path="register" element={<RegisterPage />} />
+            </Route>
+
+            <Route element={<AdminProtectedRoute />}>
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<AdminGamesPage />} />
+                <Route path="games" element={<AdminGamesPage />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="orders" element={<AdminOrdersPage />} />
+                <Route path="promotions" element={<AdminPromotionsPage />} />
+              </Route>
             </Route>
           </Routes>
         </CartProvider>
