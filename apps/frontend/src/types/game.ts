@@ -9,5 +9,8 @@ export interface Game {
   discountedPrice?: number; // Optional discounted price
   category: string; // e.g., 'pc', 'console', 'mobile'
   description?: string; // Optional short description
+  platform?: string | string[]; // Platform(s) the game is available on
+  releaseDate?: string; // Release date in ISO string format (e.g., "YYYY-MM-DDTHH:mm:ssZ")
+  rating?: number; // Optional game rating
   // Add other relevant fields from your API response
 }
