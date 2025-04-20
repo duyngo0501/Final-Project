@@ -72,7 +72,7 @@ const AdminGamesPage: React.FC = () => {
         { text: "Console", value: "console" },
         { text: "Mobile", value: "mobile" },
       ],
-      onFilter: (value: string, record: AdminGame) => record.category === value,
+      onFilter: (value: any, record: AdminGame) => record.category === value,
     },
     {
       title: "Price",
