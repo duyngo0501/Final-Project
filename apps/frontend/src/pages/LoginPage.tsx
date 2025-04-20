@@ -1,136 +1,104 @@
-import { useState, useEffect, ChangeEvent, FormEvent } from "react";
+import React from "react";
+import { Form, Input, Button, Card, Typography, Alert } from "antd";
+import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import { Input, Button, Alert, Typography, Card } from "antd";
-import { MailOutlined, LockOutlined } from "@ant-design/icons";
 import { useAuth } from "@/contexts/AuthContext";
-import { Credentials } from "@/contexts/AuthContext";
+import { Credentials } from "@/contexts/AuthContext"; // Import Credentials type
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 /**
- * LoginPage component providing a form for user login.
- * Uses Ant Design components for UI and useState for form management.
- * @returns {JSX.Element} The rendered login page.
+ * @description Login page component with email and password form.
+ * Uses AuthContext to handle login logic.
+ * @returns {React.FC} The LoginPage component.
  */
-const LoginPage = (): JSX.Element => {
+const LoginPage: React.FC = () => {
+  const [form] = Form.useForm();
   const navigate = useNavigate();
-  const { login } = useAuth((state) => ({ login: state.login }));
-  const authError = useAuth((state) => state.error);
-  const { clearError } = useAuth((state) => ({ clearError: state.clearError }));
+  // Select necessary state/functions from AuthContext
+  const login = useAuth((state) => state.login);
+  const isLoading = useAuth((state) => state.loading);
+  const error = useAuth((state) => state.error);
+  const clearError = useAuth((state) => state.clearError);
 
-  const [loading, setLoading] = useState<boolean>(false);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Credentials>({
-    email: "",
-    password: "",
-  });
-
-  useEffect(() => {
-    setLocalError(null);
-    if (authError) clearError();
-  }, []);
-
-  useEffect(() => {
-    if (authError) {
-      setLocalError(null);
-    }
-  }, [authError]);
-
-  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setLocalError(null);
-    if (authError) clearError();
-    setLoading(true);
-
+  const onFinish = async (values: Credentials) => {
+    clearError(); // Clear previous errors
     try {
-      await login(formData);
-      navigate("/");
-    } catch (err: any) {
-      console.error("Login submission error:", err);
-      setLocalError(
-        authError || "Login failed. Please check your credentials."
-      );
-    } finally {
-      setLoading(false);
+      await login(values);
+      navigate("/"); // Redirect to home on successful login
+      // Optionally show success message
+    } catch (err) {
+      // Error is already set in AuthContext state by the login function
+      console.error("Login failed on page:", err);
+      // No need to set local error state, just rely on context error
     }
   };
+
+  // Clear error when component unmounts or form changes
+  React.useEffect(() => {
+    return () => {
+      clearError();
+    };
+  }, [clearError]);
 
   return (
-    <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
-      <Card className="w-full max-w-md shadow-lg">
-        <Title level={2} className="text-center mb-8">
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        minHeight: "calc(100vh - 150px)",
+      }}
+    >
+      <Card style={{ width: 400 }}>
+        <Title level={2} style={{ textAlign: "center" }}>
           Login
         </Title>
-
-        {(localError || authError) && (
+        {error && (
           <Alert
-            message={localError || authError}
+            message={error}
             type="error"
             showIcon
             closable
-            onClose={() => {
-              setLocalError(null);
-              if (authError) clearError();
-            }}
-            className="mb-6"
+            onClose={clearError}
+            style={{ marginBottom: 20 }}
           />
         )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <Input
-              prefix={<MailOutlined className="site-form-item-icon" />}
-              placeholder="Email"
-              size="large"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Input.Password
-              prefix={<LockOutlined className="site-form-item-icon" />}
-              placeholder="Password"
-              size="large"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <Button
-              type="primary"
-              htmlType="submit"
-              className="w-full"
-              loading={loading}
-              size="large"
-            >
+        <Form
+          form={form}
+          name="login"
+          onFinish={onFinish}
+          initialValues={{ remember: true }}
+          size="large"
+        >
+          <Form.Item
+            name="email"
+            rules={[
+              {
+                required: true,
+                message: "Please input your Email!",
+                type: "email",
+              },
+            ]}
+          >
+            <Input prefix={<UserOutlined />} placeholder="Email" />
+          </Form.Item>
+          <Form.Item
+            name="password"
+            rules={[{ required: true, message: "Please input your Password!" }]}
+          >
+            <Input.Password prefix={<LockOutlined />} placeholder="Password" />
+          </Form.Item>
+          {/* Add Remember me or Forgot password if needed */}
+          <Form.Item>
+            <Button type="primary" htmlType="submit" loading={isLoading} block>
               Log in
             </Button>
+          </Form.Item>
+          <div style={{ textAlign: "center" }}>
+            Or <Link to="/register">register now!</Link>
           </div>
-        </form>
-
-        <div className="text-center mt-6">
-          <Text className="text-sm text-gray-600">
-            Don't have an account?{" "}
-            <Link to="/register" className="text-blue-600 hover:text-blue-800">
-              Register here
-            </Link>
-          </Text>
-        </div>
+        </Form>
       </Card>
     </div>
   );
