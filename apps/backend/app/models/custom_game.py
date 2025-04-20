@@ -37,7 +37,7 @@ class CustomGame(SQLModel, table=True):
 
     __tablename__ = "custom_games"  # Explicit table name
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+    id: str = Field(primary_key=True, index=True, nullable=False)
     name: str = Field(index=True, max_length=255, nullable=False)
     # Ensure slug is non-nullable if it's always required
     slug: str = Field(unique=True, index=True, max_length=255, nullable=False)
@@ -47,7 +47,7 @@ class CustomGame(SQLModel, table=True):
     background_image: HttpUrl | None = Field(default=None, sa_column=Column(String))
 
     # Link to the admin user who created the game
-    created_by_admin_id: uuid.UUID | None = Field(
+    created_by_admin_id: str | None = Field(
         default=None, foreign_key="app_users.id", index=True
     )
 
@@ -61,6 +61,7 @@ class CustomGame(SQLModel, table=True):
 
     # Relationship to the creating admin User
     # Ensure UserItem model has the corresponding 'custom_games_added' relationship
-    admin_creator: Optional["UserItem"] = Relationship(
-        back_populates="custom_games_added"
-    )
+    # Commenting out due to missing 'custom_games_added' on UserItem
+    # admin_creator: Optional["UserItem"] = Relationship(
+    #     back_populates="custom_games_added"
+    # )

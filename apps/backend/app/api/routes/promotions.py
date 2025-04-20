@@ -4,8 +4,12 @@ from sqlalchemy.orm import Session
 # Import the correct Admin dependency from deps.py
 from app.api.deps import AdminUser  # Import AdminUser and SessionDep
 from app.core.db import get_db  # Assuming get_db is defined in app/core/db.py
-from app.models.promotion import Promotion
-from app.schemas.promotion import PromotionCreate, PromotionResponse, PromotionUpdate
+from app.schemas.promotion import (
+    Promotion,
+    PromotionCreate,
+    PromotionResponse,
+    PromotionUpdate,
+)
 
 # Remove incorrect import
 # from app.auth.dependencies import admin_required

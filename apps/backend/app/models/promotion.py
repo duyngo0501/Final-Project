@@ -1,6 +1,9 @@
 """SQLModel definition for Promotions and related types."""
 
 import enum
+
+# Remove uuid import if no longer needed by other fields
+# import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -21,7 +24,7 @@ class DiscountType(str, enum.Enum):
     FIXED = "fixed"
 
 
-class Promotion(SQLModel, table=True):
+class PromotionItem(SQLModel, table=True):
     """Represents a promotional offer or discount code in the database.
 
     Stores details about a promotion, including its code, discount value,
@@ -44,7 +47,7 @@ class Promotion(SQLModel, table=True):
 
     __tablename__ = "promotions"
 
-    # Consider using UUID for consistency with other models if possible
+    # Revert primary key back to String
     id: str = Field(primary_key=True, index=True)
     code: str = Field(max_length=100, unique=True, index=True, nullable=False)
     description: str | None = Field(default=None, max_length=255)

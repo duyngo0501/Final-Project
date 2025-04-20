@@ -17,6 +17,7 @@ dependencies = [
     "typing-extensions>=4.6.0",
     "python-slugify>=8.0.4",
     "resend>=2.7.0",
+    "passlib[bcrypt]>=1.7.4",
 ]
 
 [dependency-groups]

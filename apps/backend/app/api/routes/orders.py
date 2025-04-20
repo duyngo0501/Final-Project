@@ -4,10 +4,10 @@ from typing import List
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 # Reverted imports to use absolute paths from 'app'
-from app.api.deps import SessionDep
+from app.api.deps import SessionDep, CurrentUser
 from app.models.order import Order, OrderItem
 from app.schemas.order import (
     OrderCreateSchema,
@@ -203,3 +203,58 @@ async def create_order(
         "Order %s placed successfully for %s", order_id_str, order_in.customer_email
     )
     return new_order  # FastAPI will convert using OrderResponse schema
+
+
+@router.get("/", response_model=List[OrderResponseSchema])
+async def get_my_orders(
+    session: SessionDep,
+    current_user: CurrentUser,
+    skip: int = 0,
+    limit: int = 100,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> List[Order]:
+    """
+    Retrieve the authenticated user's order history.
+    Supports pagination using skip and limit query parameters.
+    Supports filtering by status, start_date, and end_date.
+    """
+    logger.info(
+        f"Fetching orders for user: {current_user.email}, skip: {skip}, limit: {limit}, "
+        f"status: {status}, start: {start_date}, end: {end_date}"
+    )
+
+    # Start base query
+    query = (
+        select(Order)
+        .where(Order.user_id == current_user.id)
+        .order_by(Order.order_date.desc())  # type: ignore
+    )
+
+    # Apply filters conditionally
+    if status:
+        query = query.where(Order.status == status)
+    if start_date:
+        query = query.where(Order.order_date >= start_date)
+    if end_date:
+        # Add time component to end_date for inclusive range, e.g., end of day
+        # Or adjust the comparison based on desired inclusivity (e.g., <= vs <)
+        # For simplicity here, we use < for the next day or >= for start_date
+        # A more robust approach might involve datetime manipulation
+        query = query.where(Order.order_date <= end_date)
+
+    # Apply pagination
+    query = query.offset(skip).limit(limit)
+
+    # Execute query
+    orders = session.exec(query).all()
+
+    if not orders:
+        logger.info(
+            f"No orders found for user: {current_user.email} with specified filters."
+        )
+        return []
+
+    logger.info(f"Found {len(orders)} orders for user: {current_user.email}")
+    return orders
