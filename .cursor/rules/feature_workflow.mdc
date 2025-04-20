@@ -1,0 +1,111 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Feature Implementation Workflow
+
+This outlines the standard steps for adding a new feature, from backend modeling to frontend UI integration.
+
+1.  **Backend: Define Models**
+    *   **Pydantic Models:** Define request/response validation schemas in `app/schemas/` (or similar). These ensure data integrity at the API boundary.
+    *   **SQLModel Table Models:** Define database table structures and relationships in `app/models/`. These map Pydantic models to database tables via SQLModel.
+    *   **Database Tables/Migrations:** Use Alembic to generate and apply database migrations based on changes to your SQLModel definitions. Ensure your `env.py` targets the correct metadata.
+
+2.  **Backend: Design API Router**
+    *   Create a new router instance in `app/api/routers/` (e.g., `feature_xyz.py`).
+    *   Define API endpoints using FastAPI decorators (`@router.get`, `@router.post`, etc.).
+    *   Use the Pydantic models defined in step 1 for `response_model` and request body validation.
+    *   Implement business logic within the endpoint functions, interacting with the database via SQLModel sessions (often injected dependencies).
+    *   Include the new router in the main FastAPI app (usually `app/main.py`) using `app.include_router()`.
+
+3.  **API: Document with cURL**
+    *   Test the new backend endpoints using `curl` or a similar HTTP client.
+    *   Save example `curl` commands (including request bodies and expected responses) to a documentation folder (e.g., `docs/api_examples/`). This provides concrete usage examples.
+    ```bash
+    # Example: POST /items/
+    curl -X POST "http://localhost:8000/items/" \
+         -H "Content-Type: application/json" \
+         -d '{"name": "New Item", "price": 19.99}' 
+    ```
+
+4.  **API: Export OpenAPI Schema**
+    *   Ensure your FastAPI application is running.
+    *   Access the automatically generated OpenAPI schema, typically at the `/openapi.json` endpoint (e.g., `http://localhost:8000/openapi.json`).
+    *   Save this JSON file, as it will be used by the frontend client generator. You can fetch it with `curl` or simply save it from your browser.
+    ```bash
+    curl http://localhost:8000/openapi.json -o ../frontend/openapi.json 
+    ```
+    *   *(Alternatively, configure Kubb to fetch directly from the URL)*
+
+5.  **Frontend: Generate API Client**
+    *   Navigate to the frontend directory (`apps/frontend/`).
+    *   Use Kubb to generate a typed API client based on the `openapi.json` file obtained in the previous step.
+    *   Run the Kubb generation command (this might be via `npm run generate-client` or similar, depending on your `package.json` scripts and `kubb.config.js`).
+    ```bash
+    # Example command (actual command depends on your setup)
+    npx kubb generate 
+    ```
+    *   This generates typed functions/hooks for interacting with your backend API.
+
+6.  **Frontend: Create SWR Hooks**
+    *   In your frontend codebase (e.g., `apps/frontend/src/hooks/`), create custom SWR hooks that utilize the Kubb-generated client functions.
+    *   These hooks handle data fetching, caching, revalidation, and error handling for your feature's data.
+    ```typescript
+    import useSWR from 'swr';
+    import { client } from '@/lib/api-client'; // Assuming Kubb client is exported here
+
+    /**
+     * Fetches items using SWR.
+     * @returns SWR hook result for items.
+     */
+    export const useItems = () => {
+      const { data, error, isLoading, mutate } = useSWR(
+        '/items', // SWR key, often the API path
+        () => client.getItems() // Fetcher function using Kubb client
+      );
+
+      return {
+        items: data,
+        error,
+        isLoading,
+        mutateItems: mutate,
+      };
+    };
+    ```
+
+7.  **Frontend: Design UI with Ant Design**
+    *   Create React components for your feature in `apps/frontend/src/components/` or a relevant feature directory.
+    *   Use Ant Design (`antd`) components for the user interface elements (tables, forms, buttons, etc.).
+    *   Connect the UI components to the SWR hooks created in step 6 to display data, handle user input, and trigger mutations (e.g., creating, updating, deleting data).
+    *   Ensure state updates follow the `react-context.mdc` guidelines if using context, particularly using `immer` for mutations.
+    ```jsx
+    import { useItems } from '@/hooks/useItems';
+    import { Table, Spin, Alert, Button } from 'antd';
+
+    /**
+     * Component to display a list of items.
+     * @returns JSX Element
+     */
+    export const ItemList = () => {
+      const { items, error, isLoading, mutateItems } = useItems();
+
+      if (isLoading) return <Spin />;
+      if (error) return <Alert message="Error loading items" type="error" />;
+
+      const columns = [
+        { title: 'Name', dataIndex: 'name', key: 'name' },
+        { title: 'Price', dataIndex: 'price', key: 'price' },
+        // Add more columns as needed
+      ];
+
+      return (
+        <>
+          <Button onClick={() => mutateItems()} style={{ marginBottom: 16 }}>
+            Refresh Items
+          </Button>
+          <Table dataSource={items} columns={columns} rowKey="id" />
+        </>
+      );
+    };
+    ``` 
