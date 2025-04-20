@@ -37,16 +37,14 @@ class CartEntryItem(SQLModel, table=True):
         game: Relationship to the associated GameItem.
     """
 
-    __tablename__ = "cart_items"
+    __tablename__ = "cart_entries"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    id: str = Field(primary_key=True, index=True, nullable=False)
     quantity: int = Field(default=1, nullable=False)
 
     # Foreign keys
-    cart_id: uuid.UUID = Field(foreign_key="carts.id", nullable=False, index=True)
-    game_id: uuid.UUID = Field(
-        foreign_key="games.id", nullable=False, index=True
-    )  # Renamed from product_id
+    cart_id: str = Field(foreign_key="shopping_carts.id", nullable=False, index=True)
+    game_id: str = Field(foreign_key="games.id", nullable=False, index=True)
 
     # Relationships
     cart: "ShoppingCartItem" = Relationship(back_populates="items")
@@ -68,13 +66,11 @@ class ShoppingCartItem(SQLModel, table=True):
         user: Relationship back to the UserItem who owns the cart.
     """
 
-    __tablename__ = "carts"
+    __tablename__ = "shopping_carts"
 
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    id: str = Field(primary_key=True, index=True, nullable=False)
     # Link to our app_users table
-    user_id: uuid.UUID = Field(
-        foreign_key="app_users.id", nullable=False, index=True, unique=True
-    )
+    user_id: str = Field(foreign_key="app_users.id", unique=True, index=True)
 
     # Relationships
     items: list["CartEntryItem"] = Relationship(
