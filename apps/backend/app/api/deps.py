@@ -1,11 +1,12 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
-from sqlmodel import Session # Restored
-# from supabase import Client # Removed
+from sqlmodel import Session  # Restored
 
+# from supabase import Client # Removed
 from app.core.auth import get_current_user
-from app.core.db import get_db # Restored
+from app.core.db import get_db  # Restored
+
 # from app.core.supabase_client import supabase_client # Removed
 from app.schemas.auth import UserIn
 
