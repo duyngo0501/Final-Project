@@ -1,65 +1,43 @@
-# Game Store Frontend
+# Project Name
 
-This is the frontend for the Game Store application, built with React, Vite, and Tailwind CSS.
+## API Client Generation
 
-## Features
+To generate the API client from an OpenAPI specification:
 
-- User authentication (login/register)
-- Browse games
-- View game details
-- Shopping cart functionality
-- Responsive design
+\`\`\`bash
+npm run generate:api
+\`\`\`
 
-## Prerequisites
+This will create generated files in \`src/generated/api\` directory.
 
-- Node.js (v14 or higher)
-- npm or yarn
+### Using Generated Hooks
 
-## Installation
+After generating the API client, you can import and use the generated hooks in your components:
 
-1. Clone the repository
-2. Navigate to the frontend directory:
-   ```
-   cd game-store-backend/frontend
-   ```
-3. Install dependencies:
-   ```
-   npm install
-   ```
-   or
-   ```
-   yarn
-   ```
+\`\`\`typescript
+import { useGetUsers } from './generated/api/hooks/useGetUsers'
 
-## Running the Application
+function UserList() {
+  const { data, isLoading } = useGetUsers()
+  // Use data and handle loading state
+}
+\`\`\`
 
-1. Start the development server:
-   ```
-   npm run dev
-   ```
-   or
-   ```
-   yarn dev
-   ```
+### Updating OpenAPI Specification
 
-2. Open your browser and navigate to `http://localhost:5173`
+Replace the \`openapi.json\` file with your actual API specification and run the generation script.
 
-## Backend API
+## Data Providers
 
-This frontend is designed to work with the Game Store backend API running on `http://localhost:5000`. Make sure the backend server is running before using the frontend.
+The project uses both SWR and React Query for data fetching:
 
-## Project Structure
+- SWR: Lightweight data fetching with caching and revalidation
+- React Query: Powerful async state management with advanced caching
 
-- `src/components/` - Reusable UI components
-- `src/contexts/` - React context providers for state management
-- `src/pages/` - Page components
-- `src/services/` - API service functions
+The \`DataProvider\` wraps the application, providing context for both libraries.
 
-## Technologies Used
+## Development Scripts
 
-- React
-- React Router
-- Axios
-- Tailwind CSS
-- Heroicons
-- Vite
+- \`npm run generate:api\`: Generate API client from OpenAPI spec
+- \`npm run dev\`: Start development server
+- \`npm run build\`: Build production assets
