@@ -1,0 +1,41 @@
+---
+description: Any information about turborepo or turbo
+globs: 
+alwaysApply: false
+---
+Note that pipeline is deprecated, now we use tasks
+Reference:
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    ".prettierrc",
+    "tsconfig.json",
+    "apps/backend/pyproject.toml",
+    "apps/backend/alembic.ini"
+  ],
+  "tasks": {
+    "setup": {
+      "dependsOn": ["^setup", "#^setup"],
+      "cache": false,
+      "outputs": []
+    },
+    "frontend#dev": {
+      "dependsOn": ["^setup"],
+      "cache": false,
+      "persistent": true
+    },
+    "frontend#format": {
+      "cache": false,
+      "outputs": []
+    },
+    "dev": {
+      "dependsOn": ["^setup"],
+      "cache": false,
+      "persistent": true
+    },
+    "format": {
+      "cache": false,
+      "outputs": []
+    }
+  }
+}

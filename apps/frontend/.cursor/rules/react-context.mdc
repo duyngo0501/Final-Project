@@ -1,0 +1,327 @@
+---
+description: Guidelines for state management using React Context and use-context-selector
+globs: **/*.jsx, **/*.tsx, **/*.js, **/*.ts
+filesToApplyRule: **/*.jsx, **/*.tsx, **/*.js, **/*.ts
+alwaysApply: true
+---
+
+- **Context Organization**
+  - Create separate context files for different domains of state
+  - Place context files in a dedicated `contexts` directory
+  - Name context files descriptively (e.g., `AuthContext.jsx`, `CartContext.jsx`)
+  - Export both the context and its provider from the same file
+  - Include TypeScript interfaces for context values when using TypeScript
+
+  ```typescript
+  // ✅ DO: Organize contexts by domain with clear naming
+  // src/contexts/AuthContext.tsx
+  export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+  export const AuthProvider = ({ children }) => { /* ... */ };
+
+  // ✅ DO: Include TypeScript interfaces when applicable
+  interface AuthContextType {
+    user: User | null;
+    login: (credentials: Credentials) => Promise<void>;
+    logout: () => Promise<void>;
+    isLoading: boolean;
+    error: Error | null;
+  }
+  ```
+
+- **Context Provider Structure**
+  - Implement providers as functional components with children prop
+  - Initialize state using appropriate hooks (useState, useReducer)
+  - Memoize complex values and callback functions
+  - Provide clear default values for the context
+  - Handle loading and error states within the provider
+
+  ```jsx
+  // ✅ DO: Structure providers with proper state management
+  export const CartProvider = ({ children }) => {
+    const [items, setItems] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState(null);
+    
+    // Memoize callback functions
+    const addItem = useCallback((item) => {
+      setItems(prevItems => [...prevItems, item]);
+    }, []);
+    
+    // Memoize context value
+    const value = useMemo(() => ({
+      items,
+      addItem,
+      isLoading,
+      error
+    }), [items, addItem, isLoading, error]);
+    
+    return (
+      <CartContext.Provider value={value}>
+        {children}
+      </CartContext.Provider>
+    );
+  };
+  
+  // ❌ DON'T: Create new objects on each render without memoization
+  const BadCartProvider = ({ children }) => {
+    const [items, setItems] = useState([]);
+    
+    // This creates a new function on every render
+    const addItem = (item) => {
+      setItems([...items, item]);
+    };
+    
+    // This creates a new object on every render
+    return (
+      <CartContext.Provider value={{ items, addItem }}>
+        {children}
+      </CartContext.Provider>
+    );
+  };
+  ```
+
+- **Context Consumption**
+  - Create custom hooks for consuming context
+  - Throw meaningful errors when context is used outside of provider
+  - Use `use-context-selector` for selective re-renders
+  - Prefer destructuring specific values over using the entire context
+
+  ```jsx
+  // ✅ DO: Create custom hooks for consuming context
+  export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+      throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+  };
+  
+  // ✅ DO: Use destructuring to only consume what you need
+  const LoginForm = () => {
+    const { login, error } = useAuth();
+    // Component only re-renders when login or error changes
+  };
+  
+  // ❌ DON'T: Use context directly without custom hooks
+  const BadLoginForm = () => {
+    const context = useContext(AuthContext);
+    // No error checking if context is undefined
+    // Component re-renders on any context value change
+  };
+  ```
+
+- **Using use-context-selector for Performance**
+  - Install the package: `npm install use-context-selector`
+  - Create contexts with `createContext` from `use-context-selector`
+  - Use `useContextSelector` to select specific parts of context
+  - Implement selectors as pure functions
+  - Memoize complex selectors with `useMemo`
+
+  ```jsx
+  // ✅ DO: Use use-context-selector for performance
+  import { createContext, useContextSelector } from 'use-context-selector';
+  
+  // Create context with use-context-selector
+  export const UserContext = createContext(null);
+  
+  // Use selector to pick specific values
+  const UserProfile = () => {
+    // Only re-renders when user.profile changes
+    const userProfile = useContextSelector(UserContext, state => state.user.profile);
+    
+    return <div>{userProfile.name}</div>;
+  };
+  
+  // Use multiple selectors for different parts
+  const UserActions = () => {
+    // Only re-renders when updateUser changes
+    const updateUser = useContextSelector(UserContext, state => state.updateUser);
+    
+    return <button onClick={updateUser}>Update</button>;
+  };
+  
+  // ❌ DON'T: Select entire objects when only needing parts
+  const BadUserComponent = () => {
+    // Will re-render when any part of user changes
+    const user = useContextSelector(UserContext, state => state.user);
+    
+    return <div>{user.profile.name}</div>;
+  };
+  ```
+
+- **Context Composition**
+  - Compose multiple providers using a single root provider
+  - Order providers based on dependencies (providers that depend on others should be nested inside them)
+  - Create a dedicated `Providers.jsx` component for composition
+  - Keep provider nesting shallow when possible
+
+  ```jsx
+  // ✅ DO: Compose providers in a dedicated component
+  export const AppProviders = ({ children }) => {
+    return (
+      <ThemeProvider>
+        <AuthProvider>
+          <CartProvider>
+            {children}
+          </CartProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    );
+  };
+  
+  // Use in the root component
+  const App = () => {
+    return (
+      <AppProviders>
+        <Router>
+          <Routes />
+        </Router>
+      </AppProviders>
+    );
+  };
+  ```
+
+- **Context with Reducers**
+  - Use `useReducer` for complex state logic
+  - Define action types as constants
+  - Create action creators for type safety
+  - Implement pure reducer functions
+  - Split large reducers into smaller sub-reducers
+
+  ```jsx
+  // ✅ DO: Use reducers for complex state
+  // Action types
+  const ADD_TO_CART = 'ADD_TO_CART';
+  const REMOVE_FROM_CART = 'REMOVE_FROM_CART';
+  const CLEAR_CART = 'CLEAR_CART';
+  
+  // Action creators
+  const addToCart = (item) => ({ type: ADD_TO_CART, payload: item });
+  const removeFromCart = (itemId) => ({ type: REMOVE_FROM_CART, payload: itemId });
+  const clearCart = () => ({ type: CLEAR_CART });
+  
+  // Reducer
+  const cartReducer = (state, action) => {
+    switch (action.type) {
+      case ADD_TO_CART:
+        return { ...state, items: [...state.items, action.payload] };
+      case REMOVE_FROM_CART:
+        return { 
+          ...state, 
+          items: state.items.filter(item => item.id !== action.payload) 
+        };
+      case CLEAR_CART:
+        return { ...state, items: [] };
+      default:
+        return state;
+    }
+  };
+  
+  // Context provider with reducer
+  export const CartProvider = ({ children }) => {
+    const [state, dispatch] = useReducer(cartReducer, { items: [] });
+    
+    // Create memoized action dispatchers
+    const actions = useMemo(() => ({
+      addItem: (item) => dispatch(addToCart(item)),
+      removeItem: (itemId) => dispatch(removeFromCart(itemId)),
+      clearCart: () => dispatch(clearCart())
+    }), []);
+    
+    const value = useMemo(() => ({ 
+      ...state, 
+      ...actions 
+    }), [state, actions]);
+    
+    return (
+      <CartContext.Provider value={value}>
+        {children}
+      </CartContext.Provider>
+    );
+  };
+  ```
+
+- **Testing Context**
+  - Create test providers that wrap components under test
+  - Allow overriding default context values in tests
+  - Mock context dependencies
+  - Test both provider and consumer components separately
+
+  ```jsx
+  // ✅ DO: Create test utilities for context
+  export const renderWithAuthContext = (ui, contextValues = {}) => {
+    const defaultValues = {
+      user: null,
+      login: jest.fn(),
+      logout: jest.fn(),
+      isLoading: false,
+      error: null,
+      ...contextValues
+    };
+    
+    return render(
+      <AuthContext.Provider value={defaultValues}>
+        {ui}
+      </AuthContext.Provider>
+    );
+  };
+  
+  // Test example
+  test('shows user profile when logged in', () => {
+    const mockUser = { name: 'Test User', email: 'test@example.com' };
+    
+    renderWithAuthContext(<UserProfile />, { user: mockUser });
+    
+    expect(screen.getByText('Test User')).toBeInTheDocument();
+  });
+  ```
+
+- **Context Performance Optimization**
+  - Split large contexts into smaller, more focused ones
+  - Use `React.memo` for components that consume context
+  - Implement `useMemo` and `useCallback` for context values
+  - Consider using `use-context-selector` for fine-grained updates
+  - Profile renders with React DevTools to identify unnecessary re-renders
+
+  ```jsx
+  // ✅ DO: Optimize with React.memo and hooks
+  const UserInfo = React.memo(({ userId }) => {
+    // Only re-renders when the selected user changes
+    const user = useContextSelector(UserContext, state => 
+      state.users.find(u => u.id === userId)
+    );
+    
+    return <div>{user.name}</div>;
+  });
+  
+  // ✅ DO: Split large contexts
+  // Instead of one large AppContext, use separate contexts:
+  // - AuthContext for authentication
+  // - CartContext for shopping cart
+  // - ThemeContext for UI theme
+  // - NotificationContext for notifications
+  ```
+
+- **Context API Best Practices**
+  - Keep context values serializable when possible
+  - Document the shape and purpose of each context
+  - Avoid deeply nested context providers (>3 levels)
+  - Consider alternatives for very frequent updates (e.g., Jotai, Zustand)
+  - Use context for UI state and app-wide state, not for every component
+
+  ```jsx
+  // ✅ DO: Document context shape and purpose
+  /**
+   * AuthContext provides authentication state and methods.
+   * 
+   * @property {User|null} user - The currently authenticated user or null
+   * @property {Function} login - Function to log in a user
+   * @property {Function} logout - Function to log out the current user
+   * @property {boolean} isLoading - Whether an auth operation is in progress
+   * @property {Error|null} error - Any error that occurred during auth
+   */
+  export const AuthContext = createContext(null);
+  
+  // ❌ DON'T: Use context for component-specific state
+  // Don't create a context just to avoid prop drilling for a few components
+  // Use local state or component composition instead

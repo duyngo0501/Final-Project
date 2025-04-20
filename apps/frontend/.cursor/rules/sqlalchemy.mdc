@@ -1,0 +1,228 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# SQLAlchemy ORM Guide
+
+SQLAlchemy is a comprehensive SQL toolkit and Object-Relational Mapper (ORM) for Python. The ORM allows you to interact with your database using Python objects (models) instead of writing raw SQL queries directly.
+
+## 1. Core Components
+
+*   **Engine:** Represents the connection pool and dialect for a specific database. It's the starting point for database interaction.
+*   **Session:** Manages persistence operations for ORM-mapped objects. Think of it as a workspace for your objects that coordinates saving them to and loading them from the database. Sessions use the Engine for connectivity.
+*   **Declarative Base:** A base class that your model classes inherit from. It tracks metadata about your models and the database tables they map to.
+*   **Model:** A Python class representing a database table. Instances of this class represent rows in the table.
+*   **Metadata:** A container object that keeps together many different features that relate to databases, schemas and tables.
+
+## 2. Installation
+
+```bash
+pip install sqlalchemy
+# Or if using uv
+uv pip install sqlalchemy
+
+# You also need a DBAPI driver for your specific database:
+pip install psycopg2-binary # For PostgreSQL
+pip install mysqlclient    # For MySQL/MariaDB
+# etc.
+```
+
+## 3. Basic Setup
+
+### 3.1 Creating an Engine
+
+The engine is typically created once per application.
+
+```python
+from sqlalchemy import create_engine
+
+DATABASE_URL = "postgresql+psycopg2://user:password@host:port/dbname"
+# Or: "sqlite:///./mydatabase.db"
+# Or: "mysql+mysqlclient://user:password@host/dbname"
+
+enigne = create_engine(DATABASE_URL, echo=True) # echo=True logs SQL statements
+```
+
+### 3.2 Defining Models
+
+Models inherit from a declarative base.
+
+```python
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy.orm import declarative_base, relationship
+from datetime import datetime
+
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=False)
+    email = Column(String(100), unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Define a relationship (see section 6)
+    addresses = relationship("Address", back_populates="user")
+
+class Address(Base):
+    __tablename__ = 'addresses'
+
+    id = Column(Integer, primary_key=True)
+    email_address = Column(String(100), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'))
+
+    # Define the other side of the relationship
+    user = relationship("User", back_populates="addresses")
+
+# Create tables (usually done via migrations like Alembic)
+# Base.metadata.create_all(engine)
+```
+
+*   `__tablename__`: Specifies the database table name.
+*   `Column`: Defines table columns with types and constraints.
+*   `relationship`: Defines links between models.
+
+### 3.3 Creating a Session
+
+Sessions are used for individual units of work.
+
+```python
+from sqlalchemy.orm import sessionmaker
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Usage within a request or task:
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Example with context manager:
+with SessionLocal() as session:
+    # Perform operations within this session
+    pass
+```
+
+## 4. CRUD Operations (Create, Read, Update, Delete)
+
+Operations are typically performed within a session context.
+
+```python
+# Assume 'session' is an active Session object
+
+# --- Create ---
+new_user = User(name="Alice", email="alice@example.com")
+session.add(new_user)
+session.commit() # Persists the change to the DB
+# After commit, new_user.id will be populated (if auto-incrementing PK)
+
+# --- Read (Query) ---
+# Get user by primary key
+alice = session.get(User, new_user.id)
+
+# Query using filter_by (simple key-value)
+alice_again = session.query(User).filter_by(name="Alice").first()
+
+# Query using filter (more complex conditions)
+specific_user = session.query(User).filter(User.email == "alice@example.com").one_or_none()
+
+# Get all users
+all_users = session.query(User).all()
+
+# Using SQLAlchemy 2.0+ style (preferred)
+from sqlalchemy import select
+
+# Select single user by ID
+stmt_get = select(User).where(User.id == new_user.id)
+alice_v2 = session.scalars(stmt_get).first()
+
+# Select user by name
+stmt_filter = select(User).where(User.name == "Alice")
+alice_again_v2 = session.scalars(stmt_filter).first()
+
+# Select all users
+stmt_all = select(User)
+all_users_v2 = session.scalars(stmt_all).all()
+
+
+# --- Update ---
+if alice_v2:
+    alice_v2.email = "alice_updated@example.com"
+    session.commit() # Changes are detected and flushed
+
+# --- Delete ---
+if alice_v2:
+    session.delete(alice_v2)
+    session.commit()
+
+```
+
+**Key Session Methods:**
+
+*   `session.add(obj)`: Stage an object to be inserted.
+*   `session.add_all([obj1, obj2])`: Stage multiple objects.
+*   `session.delete(obj)`: Stage an object to be deleted.
+*   `session.commit()`: Flush pending changes to the database and commit the transaction.
+*   `session.rollback()`: Roll back the current transaction.
+*   `session.query(Model)`: (Legacy) Start a query for a model.
+*   `session.get(Model, pk)`: Retrieve an object by its primary key (efficiently).
+*   `session.execute(statement)`: Execute a Core API statement (like `select()`, `insert()`, `update()`, `delete()`).
+*   `session.scalars(statement)`: Execute a statement and return the first column of each row.
+*   `session.scalar(statement)`: Execute a statement and return the first column of the first row.
+
+## 5. Relationships
+
+SQLAlchemy allows defining relationships between models.
+
+*   **One-to-Many:** (e.g., One `User` has many `Address` objects)
+    *   Use `relationship()` on the "one" side (`User.addresses`).
+    *   Use `ForeignKey()` column on the "many" side (`Address.user_id`).
+    *   Use `relationship()` on the "many" side (`Address.user`) with `back_populates` pointing to the relationship name on the other model.
+*   **Many-to-One:** The reverse of one-to-many (implicit in the `Address.user` example).
+*   **Many-to-Many:** Requires an association table. Define relationships from both primary models to the association table.
+*   **One-to-One:** Similar to one-to-many, but add `uselist=False` to the `relationship()` on the parent side.
+
+```python
+# Example: Accessing related objects
+user = session.get(User, 1)
+if user:
+    print(f"User: {user.name}")
+    for addr in user.addresses:
+        print(f"  Address: {addr.email_address}")
+
+# Example: Adding related objects
+new_address = Address(email_address="home@example.com", user=user) # Associate with user
+session.add(new_address)
+session.commit()
+```
+
+## 6. Eager vs. Lazy Loading
+
+*   **Lazy Loading (Default):** Related objects (e.g., `user.addresses`) are loaded from the database only when the attribute is first accessed. Can lead to N+1 query problems if accessing related objects for many parent objects in a loop.
+*   **Eager Loading:** Load related objects along with the parent object in the initial query.
+    *   `joinedload()`: Uses a `LEFT OUTER JOIN`.
+    *   `selectinload()`: Uses a separate `SELECT ... WHERE IN (...)` query.
+
+```python
+from sqlalchemy.orm import joinedload, selectinload
+
+# Eager load addresses using JOIN
+stmt = select(User).options(joinedload(User.addresses)).where(User.id == 1)
+user = session.scalars(stmt).first()
+# Accessing user.addresses here will not trigger a new query
+
+# Eager load addresses using a separate SELECT IN query
+stmt = select(User).options(selectinload(User.addresses)).where(User.id == 1)
+user = session.scalars(stmt).first()
+```
+
+## 7. Further Reading
+
+*   **SQLAlchemy ORM Tutorial:** [https://docs.sqlalchemy.org/en/20/orm/tutorial.html](mdc:https:/docs.sqlalchemy.org/en/20/orm/tutorial.html)
+*   **Session Basics:** [https://docs.sqlalchemy.org/en/20/orm/session_basics.html](mdc:https:/docs.sqlalchemy.org/en/20/orm/session_basics.html)
+*   **Relationship Configuration:** [https://docs.sqlalchemy.org/en/20/orm/relationship_config.html](mdc:https:/docs.sqlalchemy.org/en/20/orm/relationship_config.html)
+*   **Querying (2.0 style):** [https://docs.sqlalchemy.org/en/20/tutorial/data_select.html](mdc:https:/docs.sqlalchemy.org/en/20/tutorial/data_select.html) 
