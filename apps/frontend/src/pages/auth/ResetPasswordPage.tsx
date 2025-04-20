@@ -91,38 +91,41 @@ const ResetPasswordPage: React.FC = () => {
     setLoading(true);
     setError(null);
     setSuccess(null);
-    console.log("Attempting to set new password.");
 
     if (!accessToken) {
       setError(
-        "Authentication token not found. Please ensure you followed the reset link correctly."
+        "Authentication token not found. Please ensure you followed the reset link correctly or try requesting a reset again."
       );
       setLoading(false);
       return;
     }
 
     try {
-      // TODO: Replace with actual API call to backend POST /api/v1/auth/reset-password
-      // Send the accessToken in the Authorization header
-      // Send values.password in the body
+      const response = await fetch(
+        "http://localhost:5000/api/v1/auth/reset-password",
+        {
+          // Assuming Flask runs on port 5000
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`, // Send the token obtained via Supabase callback
+          },
+          body: JSON.stringify({ new_password: values.password }), // Send the new password
+        }
+      );
 
-      // Example structure:
-      // const response = await fetch('http://localhost:5000/api/v1/auth/reset-password', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'Authorization': `Bearer ${accessToken}`,
-      //   },
-      //   body: JSON.stringify({ new_password: values.password }),
-      // });
-      // const result = await response.json();
-      // if (!response.ok) throw new Error(result.error || 'Failed to reset password');
+      const result = await response.json();
 
-      // Simulate API call delay
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      if (!response.ok) {
+        // Use error message from backend if available
+        throw new Error(
+          result.error || `HTTP error! status: ${response.status}`
+        );
+      }
 
       setSuccess(
-        "Your password has been reset successfully! You can now log in."
+        result.message ||
+          "Your password has been reset successfully! You can now log in."
       );
       form.resetFields();
 
