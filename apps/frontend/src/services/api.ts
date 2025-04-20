@@ -117,7 +117,7 @@ const dummyGames: Game[] = [
 // --- Auth API --- (Placeholders based on AuthContext usage)
 // Temporarily comment out named export
 // export const authAPI = {
-const authAPI = {
+export const authAPI = {
   register: async (userData: UserData): Promise<{ data: AuthResponse }> => {
     console.log("[Mock API] Registering:", userData);
     // Simulate API call
@@ -185,7 +185,7 @@ interface GamesApiResponse {
 }
 // Temporarily comment out named export
 // export const gamesAPI = {
-const gamesAPI = {
+export const gamesAPI = {
   getAllGames: async (
     page: number = 1,
     limit: number = 20
@@ -201,12 +201,27 @@ const gamesAPI = {
         games: paginatedGames,
         totalGames: dummyGames.length,
         currentPage: page,
+        totalPages: Math.ceil(dummyGames.length / limit),
       },
     });
   },
 
   // Add getGameById if needed
   // getGameById: async (id: number): Promise<{ data: Game }> => { ... }
+  getGameById: async (id: string): Promise<{ data: Game }> => {
+    console.log(`[Mock API] Getting game by ID: ${id}`);
+    await new Promise((res) => setTimeout(res, 300));
+    // Ensure id is treated as a number for comparison if game IDs are numbers
+    const gameId = parseInt(id, 10);
+    const game = dummyGames.find((g) => g.id === gameId);
+    if (game) {
+      return Promise.resolve({ data: game });
+    }
+    // Simulate 404 Not Found
+    return Promise.reject({
+      response: { status: 404, data: { error: "Game not found" } },
+    });
+  },
 };
 
 // --- Cart API --- (Mocks)
@@ -214,7 +229,7 @@ let mockServerCart: Cart = { id: "cart-456", userId: "user-123", items: [] }; //
 
 // Temporarily comment out named export
 // export const cartAPI = {
-const cartAPI = {
+export const cartAPI = {
   getCart: async (): Promise<{ data: Cart | null }> => {
     console.log("[Mock API] Getting cart...");
     await new Promise((res) => setTimeout(res, 400));
@@ -331,7 +346,12 @@ const cartAPI = {
   },
 };
 
-// Export cartAPI as default for testing
-export default cartAPI;
 // Export other APIs if needed for other parts of the app to function during test
 // export { authAPI, gamesAPI };
+
+// Keep this export at the end of the file
+// export default {
+//   authAPI,
+//   gamesAPI,
+//   cartAPI,
+// };

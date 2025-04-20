@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { Layout, Row, Col, Spin, Alert, message } from "antd";
 import Navbar from "@/components/layout/Navbar"; // Assuming Navbar is in layout
-import Footer from "@/components/layout/Footer"; // Assuming Footer is in layout
 import BannerHeader from "@/components/home/BannerHeader";
 import PromotionBanner from "@/components/home/PromotionBanner";
 import GameCategories from "@/components/home/GameCategories";
@@ -43,7 +42,6 @@ const HomePage: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      <Navbar /> {/* Assuming Navbar handles its own state */}
       <Content style={{ padding: "0 48px", marginTop: "20px" }}>
         {" "}
         {/* Added top margin */}
@@ -80,7 +78,6 @@ const HomePage: React.FC = () => {
           )}
         </div>
       </Content>
-      <Footer />
     </Layout>
   );
 };

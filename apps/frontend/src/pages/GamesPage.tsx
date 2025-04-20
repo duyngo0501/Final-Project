@@ -38,14 +38,16 @@ const { RangePicker } = DatePicker;
 const mockGames: Game[] = Array.from({ length: 35 }, (_, i) => ({
   id: i + 1, // Generate numeric ID
   title: `Awesome Game ${i + 1}`,
-  thumbnail: `https://via.placeholder.com/300x200/808080/FFFFFF?text=Game+${i + 1}`,
+  // Always use cat image URL
+  thumbnail: `https://cataas.com/cat/says/game-${i + 1}?width=300&height=180`,
   price: Math.floor(Math.random() * 50) + 10,
   discountedPrice: i % 3 === 0 ? Math.floor(Math.random() * 10) + 5 : undefined,
   category: ["Action", "Adventure", "RPG", "Strategy", "Simulation"][i % 5],
   rating: Math.round((Math.random() * 4 + 1) * 10) / 10,
   releaseDate: `202${Math.floor(i / 10)}-${String((i % 12) + 1).padStart(2, "0")}-01T00:00:00Z`,
   description: `This is the description for Awesome Game ${i + 1}. It's really awesome.`,
-  // Ensure all other fields required by imported Game type are present
+  // Add platform property to match FilterSidebar usage
+  platform: ["PC", "PlayStation", "Xbox", "Switch"][i % 4],
 }));
 
 const MOCK_CATEGORIES = [
@@ -566,7 +568,6 @@ const GamesPage: React.FC = () => {
               games={currentGames}
               onQuickBuy={handleQuickBuy}
               isCartMutating={isCartMutating}
-              viewMode={viewMode}
             />
             <GamePagination
               currentPage={currentPage}

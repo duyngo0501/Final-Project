@@ -1,160 +1,7 @@
 import { useState, useEffect } from "react";
 import { Game } from "@/types/game";
 import useSWR from "swr";
-
-// TODO: Consider centralizing or fetching this dummy data if used in multiple places
-const dummyGames: Game[] = [
-  {
-    id: 101,
-    title: "Cyberpunk 2077",
-    thumbnail: "/images/game1.jpg",
-    price: 59.99,
-    category: "pc",
-    discountedPrice: 29.99,
-    description: "An open-world, action-adventure story set in Night City.",
-  },
-  {
-    id: 102,
-    title: "Elden Ring",
-    thumbnail: "/images/game2.jpg",
-    price: 69.99,
-    category: "console",
-    description:
-      "Rise, Tarnished, and be guided by grace to brandish the power of the Elden Ring.",
-  },
-  {
-    id: 103,
-    title: "Stardew Valley",
-    thumbnail: "/images/game3.jpg",
-    price: 14.99,
-    category: "pc",
-    description: "You've inherited your grandfather's old farm plot...",
-  },
-  {
-    id: 104,
-    title: "Genshin Impact",
-    thumbnail: "/images/game4.jpg",
-    price: 0,
-    category: "mobile",
-    description: "Step into a vast magical world for adventure.",
-  },
-  {
-    id: 105,
-    title: "Red Dead Redemption 2",
-    thumbnail: "/images/game5.jpg",
-    price: 49.99,
-    category: "console",
-    description: "America, 1899. The end of the wild west era has begun.",
-  },
-  {
-    id: 106,
-    title: "Among Us",
-    thumbnail: "/images/game6.jpg",
-    price: 4.99,
-    category: "mobile",
-    description: "An online multiplayer game of teamwork and betrayal.",
-  },
-  {
-    id: 107,
-    title: "Doom Eternal",
-    thumbnail: "/images/game7.jpg",
-    price: 39.99,
-    category: "pc",
-    description: "Hell's armies have invaded Earth. Become the Slayer...",
-  },
-  {
-    id: 108,
-    title: "Zelda: Tears of the Kingdom",
-    thumbnail: "/images/game8.jpg",
-    price: 69.99,
-    category: "console",
-    description:
-      "An epic adventure across the land and skies of Hyrule awaits.",
-  },
-  {
-    id: 109,
-    title: "Hades",
-    thumbnail: "/images/game9.jpg",
-    price: 24.99,
-    category: "pc",
-    description:
-      "Defy the god of the dead as you hack and slash out of the Underworld.",
-  },
-  {
-    id: 110,
-    title: "Hollow Knight",
-    thumbnail: "/images/game10.jpg",
-    price: 14.99,
-    category: "console",
-    description: "Explore twisting caverns, ancient cities and deadly wastes.",
-  },
-  {
-    id: 111,
-    title: "Factorio",
-    thumbnail: "/images/game11.jpg",
-    price: 30.0,
-    category: "pc",
-    description: "Build and maintain factories. Automate everything!",
-  },
-  {
-    id: 112,
-    title: "Pokemon GO",
-    thumbnail: "/images/game12.jpg",
-    price: 0,
-    category: "mobile",
-    description: "Discover Pokémon in the real world!",
-  },
-  {
-    id: 113,
-    title: "Grand Theft Auto V",
-    thumbnail: "/images/game13.jpg",
-    price: 29.99,
-    category: "console",
-    description: "Explore the stunning world of Los Santos and Blaine County.",
-  },
-  {
-    id: 114,
-    title: "Terraria",
-    thumbnail: "/images/game14.jpg",
-    price: 9.99,
-    category: "pc",
-    description:
-      "Dig, fight, explore, build! The very world is at your fingertips.",
-  },
-  {
-    id: 115,
-    title: "Call of Duty: Mobile",
-    thumbnail: "/images/game15.jpg",
-    price: 0,
-    category: "mobile",
-    description:
-      "Experience the iconic first-person shooter franchise on mobile.",
-  },
-  {
-    id: 116,
-    title: "The Witcher 3: Wild Hunt",
-    thumbnail: "/images/game16.jpg",
-    price: 39.99,
-    category: "pc",
-    description: "Become a professional monster slayer, Geralt of Rivia.",
-  },
-  {
-    id: 117,
-    title: "Bloodborne",
-    thumbnail: "/images/game17.jpg",
-    price: 19.99,
-    category: "console",
-    description: "Hunt your nightmares in the ancient city of Yharnam.",
-  },
-  {
-    id: 118,
-    title: "RimWorld",
-    thumbnail: "https://cataas.com/cat/says/mock-game-118?width=300&height=180",
-    price: 34.99,
-    category: "pc",
-    description: "A sci-fi colony sim driven by an intelligent AI storyteller.",
-  },
-];
+import { dummyGames } from "@/mocks/games"; // Import centralized mock data
 
 /**
  * @description Mock fetcher function to find a single game by ID.
@@ -176,6 +23,7 @@ const mockGameFetcher = async (url: string): Promise<Game | null> => {
     return null; // Or throw new Error('Invalid ID');
   }
 
+  // Use imported dummyGames array
   const foundGame = dummyGames.find((game) => game.id === id);
 
   return foundGame || null; // Return the found game or null if not found
@@ -222,7 +70,7 @@ const mockFetchGameById = async (id: number): Promise<Game | null> => {
   const mockGame: Game = {
     id: id,
     title: `Awesome Game ${id}`,
-    thumbnail: `https://via.placeholder.com/600x400/808080/FFFFFF?text=Game+${id}+Large`,
+    thumbnail: `https://cataas.com/cat/says/mock-detail-${id}?width=600&height=400`,
     price: Math.floor(Math.random() * 50) + 10,
     discountedPrice:
       id % 3 === 0 ? Math.floor(Math.random() * 10) + 5 : undefined,

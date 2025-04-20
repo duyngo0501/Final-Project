@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { gamesAPI } from "@/services/api";
-import { useCart } from "@/contexts/CartContext";
+import { CartContext } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Spin,
@@ -15,17 +15,10 @@ import {
   Card,
   message,
   Result,
+  Row,
+  Col,
 } from "antd";
-
-interface Game {
-  id: string | number;
-  title: string;
-  description: string;
-  price: number;
-  image_url?: string;
-  stock: number;
-  [key: string]: any;
-}
+import { Game } from "@/types/game";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -37,7 +30,7 @@ const { Title, Paragraph, Text } = Typography;
 const GameDetailPage = (): JSX.Element => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addToCart } = useCart((state) => ({ addToCart: state.addToCart }));
+  const cartContext = useContext(CartContext);
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
 
   const [game, setGame] = useState<Game | null>(null);
@@ -45,6 +38,11 @@ const GameDetailPage = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
+
+  if (!cartContext) {
+    return <Spin tip="Loading Context..." fullscreen />;
+  }
+  const { addItem } = cartContext;
 
   useEffect(() => {
     const fetchGame = async () => {
@@ -85,20 +83,19 @@ const GameDetailPage = (): JSX.Element => {
 
     setAddingToCart(true);
     try {
-      await addToCart(String(game.id), quantity);
+      await addItem(game, quantity);
       message.success(`${quantity} x ${game.title} added to cart!`);
       navigate("/cart");
     } catch (err: any) {
       console.error("Add to cart error:", err);
       message.error(err.message || "Failed to add game to cart");
-      setError(err.message || "Failed to add game to cart");
     } finally {
       setAddingToCart(false);
     }
   };
 
   const handleQuantityChange = (value: number | null) => {
-    if (value === null || !game) return;
+    if (value === null || !game || !game.stock) return;
     const newQuantity = Math.max(1, Math.min(game.stock, value));
     setQuantity(newQuantity);
   };
@@ -145,37 +142,51 @@ const GameDetailPage = (): JSX.Element => {
     );
   }
 
-  const canAddToCart = game.stock > 0;
+  const canAddToCart = typeof game.stock === "number" && game.stock > 0;
+  const stockAvailable = typeof game.stock === "number" ? game.stock : "N/A";
 
   return (
     <div className="max-w-5xl mx-auto p-4">
       <Card>
-        <div className="flex flex-col md:flex-row gap-8">
-          <div className="md:w-1/2 flex justify-center items-start">
+        <Row gutter={[24, 24]}>
+          <Col xs={24} md={10}>
             <Image
-              src={
-                game.image_url ||
-                "https://via.placeholder.com/600x400?text=Game+Image"
-              }
+              width="100%"
+              src={`https://cataas.com/cat/says/game-${game.id}?width=400&height=300`}
               alt={game.title}
-              className="rounded-lg max-h-[500px] object-contain"
+              className="rounded-lg object-contain max-h-[500px]"
+              fallback="https://via.placeholder.com/400x300?text=CAT"
               preview
             />
-          </div>
-          <div className="md:w-1/2 flex flex-col">
+          </Col>
+          <Col xs={24} md={14}>
             <Title level={2}>{game.title}</Title>
             <Paragraph type="secondary" className="mb-4">
-              {game.genre || "Genre not specified"}
+              {game.category || "Category not specified"}
             </Paragraph>
 
-            <Paragraph className="mb-6 text-base">{game.description}</Paragraph>
+            <Paragraph className="mb-6 text-base">
+              {game.description || "No description available."}
+            </Paragraph>
 
             <div className="mb-6">
               <Text strong className="text-3xl mr-4">
-                ${game.price.toFixed(2)}
+                {game.discountedPrice !== undefined &&
+                game.discountedPrice < game.price ? (
+                  <Space>
+                    <Text delete type="secondary">
+                      ${game.price.toFixed(2)}
+                    </Text>
+                    <Text style={{ color: "red" }}>
+                      ${game.discountedPrice.toFixed(2)}
+                    </Text>
+                  </Space>
+                ) : (
+                  `$${game.price.toFixed(2)}`
+                )}
               </Text>
               {canAddToCart ? (
-                <Tag color="green">In Stock ({game.stock} available)</Tag>
+                <Tag color="green">In Stock ({stockAvailable} available)</Tag>
               ) : (
                 <Tag color="red">Out of Stock</Tag>
               )}
@@ -201,18 +212,14 @@ const GameDetailPage = (): JSX.Element => {
               type="primary"
               size="large"
               onClick={handleAddToCart}
-              disabled={!canAddToCart || addingToCart}
+              disabled={!canAddToCart || addingToCart || !addItem}
               loading={addingToCart}
               block
             >
               {canAddToCart ? "Add to Cart" : "Out of Stock"}
             </Button>
-
-            {error && canAddToCart && (
-              <Alert message={error} type="error" showIcon className="mt-4" />
-            )}
-          </div>
-        </div>
+          </Col>
+        </Row>
       </Card>
     </div>
   );

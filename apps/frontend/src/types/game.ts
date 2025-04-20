@@ -12,5 +12,6 @@ export interface Game {
   platform?: string | string[]; // Platform(s) the game is available on
   releaseDate?: string; // Release date in ISO string format (e.g., "YYYY-MM-DDTHH:mm:ssZ")
   rating?: number; // Optional game rating
+  stock?: number; // Optional: Number of items in stock
   // Add other relevant fields from your API response
 }

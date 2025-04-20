@@ -5,9 +5,7 @@ import { Game } from "@/types/game"; // Import shared Game type using alias
 import GameCard from "@/components/game/GameCard"; // <-- Import GameCard
 import {
   FixedSizeGrid as VirtualGrid,
-  FixedSizeList as VirtualList,
   GridChildComponentProps,
-  ListChildComponentProps,
 } from "react-window";
 import { Link } from "react-router-dom"; // Import Link for card navigation
 
@@ -18,14 +16,10 @@ interface GameGridProps {
   games: Game[]; // Use imported Game type
   onQuickBuy: (game: Game) => void; // Use imported Game type
   isCartMutating?: boolean; // Add prop to accept cart loading state
-  /**
-   * View mode for the grid: 'grid' (default) or 'list'.
-   */
-  viewMode?: "grid" | "list";
 }
 
 /**
- * @description Displays a grid or list of game cards, with virtualization for performance.
+ * @description Displays a grid of game cards, with virtualization for performance.
  * @param {GameGridProps} props
  * @returns {React.FC<GameGridProps>}
  */
@@ -33,7 +27,6 @@ const GameGrid: React.FC<GameGridProps> = ({
   games,
   onQuickBuy,
   isCartMutating, // Destructure the new prop
-  viewMode = "grid",
 }) => {
   if (!games || games.length === 0) {
     return (
@@ -44,10 +37,9 @@ const GameGrid: React.FC<GameGridProps> = ({
   }
 
   // Virtualization settings
-  const CARD_HEIGHT = 320;
-  const CARD_WIDTH = 260;
-  const LIST_HEIGHT = 400;
-  const GRID_HEIGHT = 800;
+  const CARD_WIDTH = 240;
+  const CARD_HEIGHT = 440;
+  const GRID_HEIGHT = 600;
   const GRID_COLS = 4;
 
   // Render a single card (for both grid and list)
@@ -61,23 +53,7 @@ const GameGrid: React.FC<GameGridProps> = ({
     </Link>
   );
 
-  if (viewMode === "list") {
-    // Virtualized list view
-    return (
-      <VirtualList
-        height={LIST_HEIGHT}
-        itemCount={games.length}
-        itemSize={CARD_HEIGHT}
-        width={"100%"}
-      >
-        {({ index, style }: ListChildComponentProps) => (
-          <div style={{ ...style, padding: 8 }}>{renderCard(games[index])}</div>
-        )}
-      </VirtualList>
-    );
-  }
-
-  // Virtualized grid view
+  // Always render the virtualized grid view
   const rowCount = Math.ceil(games.length / GRID_COLS);
   return (
     <VirtualGrid
@@ -92,7 +68,14 @@ const GameGrid: React.FC<GameGridProps> = ({
         const gameIndex = rowIndex * GRID_COLS + columnIndex;
         if (gameIndex >= games.length) return null;
         return (
-          <div style={{ ...style, padding: 8 }}>
+          <div
+            style={{
+              ...style,
+              padding: 8,
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             {renderCard(games[gameIndex])}
           </div>
         );
