@@ -119,35 +119,3 @@ replace = "{new_version} - {now:%Y-%m-%d}"
 
 
 # https://callowayproject.github.io/bump-my-version/reference/search-and-replace-config/
-
-[tool.poetry.dependencies]
-python = "^3.11"
-# Existing dependencies likely here... keep them unless they conflict
-
-# Add/Update FastAPI related dependencies
-fastapi = "^0.111.0"
-uvicorn = { extras = ["standard"], version = "^0.29.0" }
-python-dotenv = "^1.0.1"
-sqlalchemy = { extras = ["asyncio"], version = "^2.0.30" }
-asyncpg = "^0.29.0"                                             # Assuming PostgreSQL, change if using a different async DB
-alembic = "^1.13.1"
-pydantic = { extras = ["email"], version = "^2.7.1" }
-passlib = { extras = ["bcrypt"], version = "^1.7.4" }
-python-jose = { extras = ["cryptography"], version = "^3.3.0" }
-greenlet = "^3.0.3"                                             # Often needed implicitly by SQLAlchemy async
-
-
-[tool.poetry.group.dev.dependencies]
-# Existing dev dependencies likely here... keep them
-
-# Add dev dependencies if needed, e.g., for testing
-# pytest = "^8.2.0"
-# pytest-asyncio = "^0.23.0"
-# httpx = "^0.27.0" # For testing API clients
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
-
-# Ensure other sections like [tool.uv] if present are preserved
-# ... existing uv config ...
