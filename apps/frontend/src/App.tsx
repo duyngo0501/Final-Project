@@ -9,6 +9,7 @@ import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
 import ProfilePage from "@/pages/ProfilePage";
 import BlogPage from "@/pages/BlogPage";
+import BlogPostDetailPage from "@/pages/BlogPostDetailPage";
 import PrivateRoute from "@/components/PrivateRoute";
 import MainLayout from "@/layouts/MainLayout";
 import AdminLayout from "@/layouts/AdminLayout";
@@ -34,6 +35,7 @@ function App(): JSX.Element {
               <Route path="games" element={<GamesPage />} />
               <Route path="games/:id" element={<GameDetailPage />} />
               <Route path="blog" element={<BlogPage />} />
+              <Route path="blog/:postId" element={<BlogPostDetailPage />} />
               <Route
                 path="cart"
                 element={
