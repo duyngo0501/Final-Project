@@ -1,0 +1,2 @@
+Project: Convert frontend to TypeScript.
+Goal: Complete the conversion. 
