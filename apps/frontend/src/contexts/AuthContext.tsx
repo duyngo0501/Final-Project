@@ -1,7 +1,7 @@
 import { createContext, useContextSelector } from "use-context-selector";
-import { useReducer, useEffect, ReactNode, useCallback, Reducer } from "react";
-import { produce } from "immer";
+import { useState, useEffect, ReactNode, useCallback, useMemo } from "react";
 import { authAPI } from "@/services/api"; // Removed Credentials, UserData import
+import { User } from "@/types/user"; // Import the centralized User type
 
 // FIXME: Replace with actual type definitions, ideally imported
 // Export the placeholder interface
@@ -20,121 +20,41 @@ export interface UserData {
 
 // Define the User type (adjust based on actual user data structure)
 // Export the User interface if it might be needed elsewhere
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  role: "user" | "admin";
-  created_at?: string | number | Date; // Add optional created_at field
-  // Add other user properties as needed
-}
+// REMOVE the local User interface definition
+// export interface User {
+//   id: string;
+//   username: string;
+//   email: string;
+//   role: "user" | "admin";
+//   created_at?: string | number | Date; // Add optional created_at field
+//   // Add other user properties as needed
+// }
+// ----------------------------------------
 
-// Define the shape of the authentication state
-interface AuthState {
-  user: User | null;
+// Define the context value shape
+// Note: AuthState interface is no longer needed
+interface AuthContextValue {
+  user: User | null; // Use imported User type
   token: string | null;
   loading: boolean;
   error: string | null;
-  isAuthenticated: boolean; // Derived state, kept for convenience
-  isAdmin: boolean; // Derived state, kept for convenience
-}
-
-// Define the possible actions
-type AuthAction =
-  | { type: "AUTH_INIT_START" }
-  | {
-      type: "AUTH_INIT_SUCCESS";
-      payload: { user: User | null; token: string | null };
-    }
-  | { type: "AUTH_INIT_FAILURE" }
-  | { type: "AUTH_REQUEST" }
-  | { type: "AUTH_SUCCESS"; payload: { user: User; token: string } }
-  | { type: "AUTH_FAILURE"; payload: string }
-  | { type: "LOGOUT" }
-  | { type: "CLEAR_ERROR" };
-
-// Initial state
-const initialState: AuthState = {
-  user: null,
-  token: null,
-  loading: true, // Start loading initially to check auth status
-  error: null,
-  isAuthenticated: false,
-  isAdmin: false,
-};
-
-// Reducer function using Immer
-// Explicitly type the reducer function itself
-const authReducer: Reducer<AuthState, AuthAction> = produce(
-  (draft: AuthState, action: AuthAction) => {
-    switch (action.type) {
-      case "AUTH_INIT_START":
-        draft.loading = true;
-        draft.error = null;
-        break;
-      case "AUTH_INIT_SUCCESS":
-        draft.user = action.payload.user;
-        draft.token = action.payload.token;
-        draft.isAuthenticated = !!action.payload.user;
-        draft.isAdmin = action.payload.user?.role === "admin";
-        draft.loading = false;
-        break;
-      case "AUTH_INIT_FAILURE":
-        draft.user = null;
-        draft.token = null;
-        draft.isAuthenticated = false;
-        draft.isAdmin = false;
-        draft.loading = false;
-        break;
-      case "AUTH_REQUEST":
-        draft.loading = true;
-        draft.error = null;
-        break;
-      case "AUTH_SUCCESS":
-        draft.user = action.payload.user;
-        draft.token = action.payload.token;
-        draft.isAuthenticated = true;
-        draft.isAdmin = action.payload.user.role === "admin";
-        draft.loading = false;
-        draft.error = null;
-        break;
-      case "AUTH_FAILURE":
-        draft.error = action.payload;
-        draft.user = null;
-        draft.token = null;
-        draft.isAuthenticated = false;
-        draft.isAdmin = false;
-        draft.loading = false;
-        break;
-      case "LOGOUT":
-        draft.user = null;
-        draft.token = null;
-        draft.isAuthenticated = false;
-        draft.isAdmin = false;
-        draft.error = null;
-        draft.loading = false;
-        break;
-      case "CLEAR_ERROR":
-        draft.error = null;
-        break;
-      default:
-        break;
-    }
-  }
-);
-
-// Define the context value shape
-interface AuthContextValue extends AuthState {
-  register: (userData: UserData) => Promise<User>;
-  login: (credentials: Credentials) => Promise<User>;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  register: (userData: UserData) => Promise<User>; // Use imported User type
+  login: (credentials: Credentials) => Promise<User>; // Use imported User type
   logout: () => void;
   clearError: () => void;
 }
 
 // Create the context with use-context-selector
-// Provide a default value matching the context shape, although it should not be used directly
+// Default values for functions now throw errors
 const AuthContext = createContext<AuthContextValue>({
-  ...initialState,
+  user: null,
+  token: null,
+  loading: true,
+  error: null,
+  isAuthenticated: false,
+  isAdmin: false,
   register: async () => Promise.reject(new Error("AuthProvider not found")),
   login: async () => Promise.reject(new Error("AuthProvider not found")),
   logout: () => {
@@ -151,116 +71,167 @@ interface AuthProviderProps {
 }
 
 /**
- * Provides authentication state and actions to the application.
+ * Provides authentication state and actions to the application using useState.
  * Manages user session, login, registration, and logout.
  * @param {AuthProviderProps} props The component props.
  * @returns {JSX.Element} The provider component.
  */
 export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
-  // Explicitly type useReducer with the reducer's type
-  const [state, dispatch] = useReducer<Reducer<AuthState, AuthAction>>(
-    authReducer,
-    initialState
-  );
+  // Replace useReducer with individual useState hooks
+  const [user, setUser] = useState<User | null>(null); // Use imported User type
+  const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true); // Start loading initially
+  const [error, setError] = useState<string | null>(null);
+
+  // Derived state calculated directly
+  const isAuthenticated = !!user && !!token;
+  const isAdmin = user?.role === "admin";
 
   // Check authentication status on initial load
   useEffect(() => {
+    let isMounted = true; // Track mount status for async operations
     const checkAuth = async () => {
-      dispatch({ type: "AUTH_INIT_START" });
-      const token = localStorage.getItem("token");
-      if (token) {
+      setLoading(true);
+      setError(null);
+      const storedToken = localStorage.getItem("token");
+      if (storedToken) {
         try {
-          const response = await authAPI.getCurrentUser();
+          const response = await authAPI.getCurrentUser(); // Assuming getCurrentUser relies on token implicitly or uses stored token
           const currentUser = response.data;
-          if (!currentUser) {
-            throw new Error("Invalid user data in auth check response");
+          if (isMounted && currentUser) {
+            setUser(currentUser); // No assertion needed now
+            setToken(storedToken);
+          } else if (isMounted) {
+            // Token exists but user fetch failed or returned null
+            localStorage.removeItem("token");
+            setUser(null);
+            setToken(null);
           }
-          dispatch({
-            type: "AUTH_INIT_SUCCESS",
-            payload: { user: currentUser as User, token },
-          });
         } catch (err) {
           console.error("Auth check failed:", err);
           localStorage.removeItem("token");
-          dispatch({ type: "AUTH_INIT_FAILURE" });
+          if (isMounted) {
+            setUser(null);
+            setToken(null);
+          }
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+          }
         }
       } else {
-        dispatch({ type: "AUTH_INIT_FAILURE" }); // No token found
+        if (isMounted) {
+          setUser(null);
+          setToken(null);
+          setLoading(false); // No token found, stop loading
+        }
       }
     };
 
     checkAuth();
+
+    return () => {
+      isMounted = false;
+    }; // Cleanup function
   }, []);
 
-  // Register function
+  // Register function using useState setters
   const register = useCallback(async (userData: UserData): Promise<User> => {
-    dispatch({ type: "AUTH_REQUEST" });
+    setLoading(true);
+    setError(null);
     try {
       const response = await authAPI.register(userData);
-      const { token, user } = response.data; // Adjust based on actual API response
-      localStorage.setItem("token", token);
-      dispatch({ type: "AUTH_SUCCESS", payload: { user, token } });
-      return user;
+      const { token: newToken, user: newUser } = response.data;
+      localStorage.setItem("token", newToken);
+      setUser(newUser); // No assertion needed now
+      setToken(newToken);
+      setError(null);
+      return newUser;
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || "Registration failed";
-      dispatch({ type: "AUTH_FAILURE", payload: errorMessage });
+      setError(errorMessage);
+      setUser(null);
+      setToken(null);
       throw err; // Re-throw to allow handling in components
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Login function
+  // Login function using useState setters
   const login = useCallback(async (credentials: Credentials): Promise<User> => {
-    dispatch({ type: "AUTH_REQUEST" });
+    setLoading(true);
+    setError(null);
     try {
       const response = await authAPI.login(credentials);
-      const { token, user } = response.data; // Adjust based on actual API response
-      localStorage.setItem("token", token);
-      dispatch({ type: "AUTH_SUCCESS", payload: { user, token } });
-      return user;
+      const { token: newToken, user: newUser } = response.data;
+      localStorage.setItem("token", newToken);
+      setUser(newUser); // No assertion needed now
+      setToken(newToken);
+      setError(null);
+      return newUser;
     } catch (err: any) {
       const errorMessage = err.response?.data?.error || "Login failed";
-      dispatch({ type: "AUTH_FAILURE", payload: errorMessage });
+      setError(errorMessage);
+      setUser(null);
+      setToken(null);
       throw err; // Re-throw to allow handling in components
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Logout function
+  // Logout function using useState setters
   const logout = useCallback(() => {
     localStorage.removeItem("token");
-    dispatch({ type: "LOGOUT" });
+    setUser(null);
+    setToken(null);
+    setError(null);
+    setLoading(false);
   }, []);
 
   // Function to clear errors
   const clearError = useCallback(() => {
-    dispatch({ type: "CLEAR_ERROR" });
+    setError(null);
   }, []);
 
-  // Assemble the context value
-  const value: AuthContextValue = {
-    ...state,
-    register,
-    login,
-    logout,
-    clearError,
-  };
+  // Assemble the context value using useMemo for stability
+  const value: AuthContextValue = useMemo(
+    () => ({
+      user,
+      token,
+      loading,
+      error,
+      isAuthenticated,
+      isAdmin,
+      register,
+      login,
+      logout,
+      clearError,
+    }),
+    [
+      user,
+      token,
+      loading,
+      error,
+      isAuthenticated,
+      isAdmin,
+      register,
+      login,
+      logout,
+      clearError,
+    ]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 /**
- * Hook to access the Authentication context.
- * Uses useContextSelector for performance optimization.
- * @template T The type of the selected state slice.
- * @param {(state: AuthContextValue) => T} selector Function to select a slice of the context state.
- * @returns {T} The selected state slice.
- * @throws Will throw an error if used outside of an AuthProvider.
- * @example
- * const user = useAuth(state => state.user);
- * const isAuthenticated = useAuth(state => state.isAuthenticated);
- * const { login, logout } = useAuth(state => ({ login: state.login, logout: state.logout }));
+ * Custom hook to consume the AuthContext selectively.
+ * @template T
+ * @param {(state: AuthContextValue) => T} selector - Function to select data from context.
+ * @returns {T} The selected data.
  */
 export const useAuth = <T,>(selector: (state: AuthContextValue) => T): T => {
-  const context = useContextSelector(AuthContext, selector);
-  // Default value in createContext handles the error case if used outside provider.
-  return context;
+  return useContextSelector(AuthContext, selector);
 };

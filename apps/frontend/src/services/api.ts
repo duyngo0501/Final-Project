@@ -1,17 +1,11 @@
 import axios from "axios";
-import { Game } from "@/types/game"; // Assuming Game type is defined
+import { Game } from "@/types/game";
+import { User } from "@/types/user"; // Import the centralized User type
 
 // Define placeholder types for API responses/requests if not already defined elsewhere
-interface User {
-  id: string;
-  username: string;
-  email: string;
-  role: string;
-}
-
 interface AuthResponse {
   token: string;
-  user: User;
+  user: User; // Use imported User type
 }
 
 interface Credentials {
@@ -120,9 +114,8 @@ const dummyGames: Game[] = [
 export const authAPI = {
   register: async (userData: UserData): Promise<{ data: AuthResponse }> => {
     console.log("[Mock API] Registering:", userData);
-    // Simulate API call
     await new Promise((res) => setTimeout(res, 500));
-    // Simulate successful registration
+    // Ensure mockUser conforms to the imported User type
     const mockUser: User = { id: "user-123", ...userData, role: "user" };
     return Promise.resolve({
       data: { token: "mock-jwt-token-register", user: mockUser },
@@ -133,12 +126,12 @@ export const authAPI = {
 
   login: async (credentials: Credentials): Promise<{ data: AuthResponse }> => {
     console.log("[Mock API] Logging in:", credentials);
-    // Simulate API call
     await new Promise((res) => setTimeout(res, 500));
     if (
       credentials.email === "user@example.com" &&
       credentials.password === "password"
     ) {
+      // Ensure mockUser conforms to the imported User type
       const mockUser: User = {
         id: "user-123",
         username: "MockUser",
@@ -156,11 +149,10 @@ export const authAPI = {
 
   getCurrentUser: async (): Promise<{ data: User | null }> => {
     console.log("[Mock API] Getting current user...");
-    // Simulate API call
     await new Promise((res) => setTimeout(res, 300));
-    // Simulate user being logged in (if a mock token exists, etc.)
-    const token = localStorage.getItem("token"); // Simple check for demo
+    const token = localStorage.getItem("token");
     if (token && token.startsWith("mock-jwt-token")) {
+      // Ensure mockUser conforms to the imported User type
       const mockUser: User = {
         id: "user-123",
         username: "MockUser",
