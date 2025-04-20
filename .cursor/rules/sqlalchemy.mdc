@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
 # SQLAlchemy ORM Guide
 
 SQLAlchemy is a comprehensive SQL toolkit and Object-Relational Mapper (ORM) for Python. The ORM allows you to interact with your database using Python objects (models) instead of writing raw SQL queries directly.
@@ -217,7 +222,7 @@ user = session.scalars(stmt).first()
 
 ## 7. Further Reading
 
-*   **SQLAlchemy ORM Tutorial:** [https://docs.sqlalchemy.org/en/20/orm/tutorial.html](https://docs.sqlalchemy.org/en/20/orm/tutorial.html)
-*   **Session Basics:** [https://docs.sqlalchemy.org/en/20/orm/session_basics.html](https://docs.sqlalchemy.org/en/20/orm/session_basics.html)
-*   **Relationship Configuration:** [https://docs.sqlalchemy.org/en/20/orm/relationship_config.html](https://docs.sqlalchemy.org/en/20/orm/relationship_config.html)
-*   **Querying (2.0 style):** [https://docs.sqlalchemy.org/en/20/tutorial/data_select.html](https://docs.sqlalchemy.org/en/20/tutorial/data_select.html) 
+*   **SQLAlchemy ORM Tutorial:** [https://docs.sqlalchemy.org/en/20/orm/tutorial.html](mdc:https:/docs.sqlalchemy.org/en/20/orm/tutorial.html)
+*   **Session Basics:** [https://docs.sqlalchemy.org/en/20/orm/session_basics.html](mdc:https:/docs.sqlalchemy.org/en/20/orm/session_basics.html)
+*   **Relationship Configuration:** [https://docs.sqlalchemy.org/en/20/orm/relationship_config.html](mdc:https:/docs.sqlalchemy.org/en/20/orm/relationship_config.html)
+*   **Querying (2.0 style):** [https://docs.sqlalchemy.org/en/20/tutorial/data_select.html](mdc:https:/docs.sqlalchemy.org/en/20/tutorial/data_select.html) 
