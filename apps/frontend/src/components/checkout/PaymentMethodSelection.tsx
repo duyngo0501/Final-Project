@@ -1,55 +1,86 @@
 import React from "react";
-import { Radio, Space, Typography } from "antd";
-import CreditCardForm from "./CreditCardForm";
+import { Radio, Space, Typography, Card } from "antd";
+import { CreditCardOutlined, AlipayCircleOutlined } from "@ant-design/icons";
+import type { RadioChangeEvent } from "antd";
 
 const { Text } = Typography;
+const { Paragraph } = Typography;
 
 /**
  * @description Interface for payment method selection props.
  */
 interface PaymentMethodSelectionProps {
-  selectedValue?: string;
+  /**
+   * Callback function executed when the payment method selection changes.
+   * @param {string} value The value of the selected payment method.
+   */
   onChange: (value: string) => void;
-  // isLoading?: boolean; // Add later if needed
+  /**
+   * The currently selected payment method value.
+   */
+  selectedValue?: string;
 }
 
 /**
- * @description Component for selecting a payment method (Placeholder).
+ * @description Component for selecting a payment method during checkout.
  * @param {PaymentMethodSelectionProps} props Component props.
  * @returns {React.FC<PaymentMethodSelectionProps>} The PaymentMethodSelection component.
  */
 const PaymentMethodSelection: React.FC<PaymentMethodSelectionProps> = ({
-  selectedValue,
   onChange,
+  selectedValue,
 }) => {
-  const handleRadioChange = (e: any) => {
+  const handleRadioChange = (e: RadioChangeEvent) => {
     onChange(e.target.value);
   };
 
   return (
-    <div>
-      <Text strong style={{ marginBottom: 16, display: "block" }}>
-        Select Payment Method
-      </Text>
-      <Radio.Group onChange={handleRadioChange} value={selectedValue}>
-        <Space direction="vertical">
-          <Radio value="credit_card">Credit Card</Radio>
-          <Radio value="paypal">PayPal (Placeholder)</Radio>
-          {/* Add more payment options later */}
-          <Radio value="stripe" disabled>
-            Stripe (Coming Soon)
+    <Radio.Group
+      onChange={handleRadioChange}
+      value={selectedValue}
+      style={{ width: "100%" }}
+    >
+      <Space direction="vertical" style={{ width: "100%" }}>
+        <Card
+          hoverable
+          style={
+            selectedValue === "credit_card" ? { borderColor: "#1890ff" } : {}
+          }
+        >
+          <Radio value="credit_card">
+            <Space>
+              <CreditCardOutlined style={{ fontSize: "1.5em" }} />
+              <Text strong>Credit Card</Text>
+            </Space>
+            <Paragraph
+              type="secondary"
+              style={{ marginLeft: 32, marginBottom: 0 }}
+            >
+              Pay with Visa, Mastercard, Amex, etc.
+            </Paragraph>
           </Radio>
-        </Space>
-      </Radio.Group>
-      {/* Render Credit Card Form if selected */}
-      {selectedValue === "credit_card" && <CreditCardForm />}
-      {/* Placeholder for PayPal integration */}
-      {selectedValue === "paypal" && (
-        <div style={{ marginTop: 20, padding: 15, border: "1px dashed #ccc" }}>
-          Placeholder for PayPal Button/Integration
-        </div>
-      )}
-    </div>
+        </Card>
+
+        <Card
+          hoverable
+          style={selectedValue === "paypal" ? { borderColor: "#1890ff" } : {}}
+        >
+          <Radio value="paypal">
+            <Space>
+              <AlipayCircleOutlined style={{ fontSize: "1.5em" }} />
+              <Text strong>PayPal</Text>
+            </Space>
+            <Paragraph
+              type="secondary"
+              style={{ marginLeft: 32, marginBottom: 0 }}
+            >
+              Pay securely using your PayPal account.
+            </Paragraph>
+          </Radio>
+        </Card>
+        {/* Add more payment options here */}
+      </Space>
+    </Radio.Group>
   );
 };
 

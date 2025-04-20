@@ -47,24 +47,27 @@ const Footer = (): JSX.Element => {
               Quick Links
             </Title>
             <Space direction="vertical" size="small">
-              <AntLink
+              <RouterLink
+                to="/games"
                 style={{ color: textColor }}
                 className="hover:!text-white transition"
               >
-                <RouterLink to="/games">Browse Games</RouterLink>
-              </AntLink>
-              <AntLink
+                Browse Games
+              </RouterLink>
+              <RouterLink
+                to="/cart"
                 style={{ color: textColor }}
                 className="hover:!text-white transition"
               >
-                <RouterLink to="/cart">Shopping Cart</RouterLink>
-              </AntLink>
-              <AntLink
+                Shopping Cart
+              </RouterLink>
+              <RouterLink
+                to="/profile"
                 style={{ color: textColor }}
                 className="hover:!text-white transition"
               >
-                <RouterLink to="/profile">My Account</RouterLink>
-              </AntLink>
+                My Account
+              </RouterLink>
             </Space>
           </div>
 

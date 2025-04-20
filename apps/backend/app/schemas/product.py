@@ -4,10 +4,12 @@ from pydantic import BaseModel, HttpUrl
 
 # --- Schemas based on RAWG.io structure ---
 
+
 class BaseProperties(BaseModel):
     id: int
     name: str
     slug: str
+
 
 class PlatformInfo(BaseModel):
     platform: BaseProperties
@@ -15,12 +17,15 @@ class PlatformInfo(BaseModel):
     # requirements_en: Optional[dict] = None # Can add later if needed
     # requirements_ru: Optional[dict] = None
 
+
 class ParentPlatformInfo(BaseModel):
     platform: BaseProperties
+
 
 class GenreInfo(BaseProperties):
     games_count: int | None = None
     image_background: HttpUrl | None = None
+
 
 # Define the main product/game schema mirroring RAWG fields
 class Product(BaseModel):
@@ -37,7 +42,7 @@ class Product(BaseModel):
     metacritic: int | None = None
     playtime: int = 0
     suggestions_count: int = 0
-    updated: str | None = None # Or datetime if parsing needed
+    updated: str | None = None  # Or datetime if parsing needed
     platforms: list[PlatformInfo] | None = []
     parent_platforms: list[ParentPlatformInfo] | None = []
     genres: list[GenreInfo] | None = []
@@ -46,6 +51,7 @@ class Product(BaseModel):
     # esrb_rating: Optional[dict] = None # Add later if needed
     # short_screenshots: Optional[List[dict]] = [] # Add later if needed
 
+
 # Define the overall listing response schema
 class ProductListingResponse(BaseModel):
     count: int
@@ -53,6 +59,7 @@ class ProductListingResponse(BaseModel):
     previous: HttpUrl | None = None
     results: list[Product]
 
+
 # You might also want schemas for creating/updating if you store products
 # class ProductCreate(BaseModel): ...
-# class ProductUpdate(BaseModel): ... 
+# class ProductUpdate(BaseModel): ...

@@ -29,13 +29,14 @@ const BannerHeader: React.FC = () => {
         <div key={game.id}>
           <a href={game.link}>
             <Image
-              src={game.imageUrl}
+              src={`https://cataas.com/cat/says/banner-${game.id}?width=1000&height=400`}
               alt={game.title}
               preview={false}
               style={{
                 ...contentStyle,
                 width: "100%",
                 height: "100%",
+
                 objectFit: "cover",
               }} // Ensure image covers the area
             />

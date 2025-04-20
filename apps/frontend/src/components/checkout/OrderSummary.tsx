@@ -1,85 +1,110 @@
 import React from "react";
-import { List, Typography, Divider, Space, Row, Col } from "antd";
-import { useCartItems } from "@/contexts/CartContext";
-import { formatCurrency } from "@/utils/helpers";
-import { CartItem } from "@/services/api";
+import {
+  Card,
+  List,
+  Avatar,
+  Typography,
+  Divider,
+  Row,
+  Col,
+  Spin,
+  Alert,
+} from "antd";
+import { CartContext } from "@/contexts/CartContext";
+import { useContextSelector } from "use-context-selector";
 
-const { Text, Title } = Typography;
+const { Title, Text } = Typography;
 
 /**
- * @description Interface for OrderSummary props (if any needed later).
+ * @description Displays a summary of the order including items and totals.
+ * Fetches cart data using CartContext.
+ * @returns {React.FC} The OrderSummary component.
  */
-interface OrderSummaryProps {
-  // Props like showImages, etc. could be added later if needed
-}
+const OrderSummary: React.FC = () => {
+  // Select necessary state from CartContext
+  const items = useContextSelector(CartContext, (v) => v?.cart?.items ?? []);
+  const isLoading = useContextSelector(
+    CartContext,
+    (v) => v?.isLoading ?? false
+  );
+  const error = useContextSelector(CartContext, (v) => v?.error ?? null);
 
-/**
- * @description Component displaying a summary of items in the cart and the total cost.
- * Typically used in checkout or review steps.
- * @param {OrderSummaryProps} props Component props.
- * @returns {React.FC<OrderSummaryProps>} The OrderSummary component.
- */
-const OrderSummary: React.FC<OrderSummaryProps> = (props) => {
-  const items = useCartItems();
+  // Calculate totals
+  const subtotal = items.reduce(
+    (sum, item) =>
+      sum + (item.game.discountedPrice ?? item.game.price) * item.quantity,
+    0
+  );
+  const estimatedTax = subtotal * 0.08; // Placeholder 8% tax
+  const shippingCost = subtotal >= 50 ? 0 : 5.99; // Placeholder shipping logic
+  const total = subtotal + estimatedTax + shippingCost;
 
-  // Calculate total price directly from items
-  const cartTotal = React.useMemo(() => {
-    return items.reduce((total, item) => {
-      const price = item.game.discountedPrice ?? item.game.price;
-      return total + price * item.quantity;
-    }, 0);
-  }, [items]);
+  if (isLoading) {
+    return (
+      <Card title="Order Summary">
+        <div style={{ textAlign: "center", padding: "20px" }}>
+          <Spin />
+        </div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card title="Order Summary">
+        <Alert message="Error loading cart summary" type="error" showIcon />
+      </Card>
+    );
+  }
 
   return (
-    <Space direction="vertical" style={{ width: "100%" }}>
-      <Title level={5} style={{ marginBottom: 0 }}>
-        Items in Cart:
-      </Title>
+    <Card title="Order Summary">
       <List
-        itemLayout="horizontal"
         dataSource={items}
+        itemLayout="horizontal"
         size="small"
-        renderItem={(item: CartItem) => {
-          const price = item.game.discountedPrice ?? item.game.price;
-          const subtotal = price * item.quantity;
-          return (
-            <List.Item key={item.game.id}>
-              <List.Item.Meta
-                // Optional: Add small thumbnail?
-                // avatar={<Avatar src={item.game.thumbnail} />}
-                title={item.game.title}
-                description={`${item.quantity} x ${formatCurrency(price)}`}
-              />
-              <Text strong>{formatCurrency(subtotal)}</Text>
-            </List.Item>
-          );
-        }}
+        renderItem={(item) => (
+          <List.Item key={item.game.id}>
+            <List.Item.Meta
+              avatar={<Avatar src={item.game.thumbnail} shape="square" />}
+              title={item.game.title}
+              description={`Qty: ${item.quantity}`}
+            />
+            <Text>
+              $$
+              {(
+                (item.game.discountedPrice ?? item.game.price) * item.quantity
+              ).toFixed(2)}
+            </Text>
+          </List.Item>
+        )}
+        style={{ marginBottom: 16, maxHeight: 200, overflowY: "auto" }} // Limit height and scroll
       />
       <Divider style={{ margin: "12px 0" }} />
-      {/* Add rows for Subtotal, Shipping, Tax if needed */}
       <Row justify="space-between">
-        <Text>Subtotal</Text>
-        <Text>{formatCurrency(cartTotal)}</Text>
+        <Text>Subtotal:</Text>
+        <Text>${subtotal.toFixed(2)}</Text>
       </Row>
       <Row justify="space-between">
-        <Text>Shipping</Text>
-        <Text>FREE</Text> {/* Placeholder */}
+        <Text>Estimated Tax:</Text>
+        <Text>${estimatedTax.toFixed(2)}</Text>
       </Row>
-      <Row justify="space-between">
-        <Text>Tax</Text>
-        <Text>Calculated at next step</Text> {/* Placeholder */}
+      <Row justify="space-between" style={{ marginBottom: 16 }}>
+        <Text>Shipping:</Text>
+        <Text>
+          {shippingCost === 0 ? "Free" : `$${shippingCost.toFixed(2)}`}
+        </Text>
       </Row>
       <Divider style={{ margin: "12px 0" }} />
       <Row justify="space-between">
-        <Title level={4} style={{ margin: 0 }}>
-          Order Total
-        </Title>
-        <Title level={4} style={{ margin: 0 }}>
-          {formatCurrency(cartTotal)}
-        </Title>{" "}
-        {/* Final total */}
+        <Text strong style={{ fontSize: "1.1em" }}>
+          Total:
+        </Text>
+        <Text strong style={{ fontSize: "1.1em" }}>
+          ${total.toFixed(2)}
+        </Text>
       </Row>
-    </Space>
+    </Card>
   );
 };
 

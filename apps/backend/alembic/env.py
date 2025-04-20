@@ -6,28 +6,39 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy import text  # Import text for executing raw SQL if needed
 
 from alembic import context
 
+# First-party model import should be after third-party, but before path manipulation
+from app.models.base import InDBBase  # noqa
+
 # Add project root to sys.path
 # This ensures alembic can find your models
-project_root = Path(__file__).resolve().parents[1] # Correct path: backend directory
+project_root = Path(__file__).resolve().parents[1]  # Correct path: backend directory
 sys.path.insert(0, str(project_root))
 
 # Load environment variables from .env file located in the project root
-env_path = project_root / '.env'
-load_dotenv(dotenv_path = env_path)
+env_path = project_root / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # Adjust the import if your Base is located elsewhere
 # Corrected import based on project structure and __init__.py
 # from app.models.base import Base # noqa
-from app.models.base import InDBBase # noqa
 
 # This assumes your models are imported somewhere accessible
 # For example, in app/models/__init__.py or app/models/base.py
 # If not, you might need to explicitly import them here:
 # from app.models.user import User  # noqa
 # from app.models.item import Item  # noqa
+
+# --- START: Ensure models are registered ---
+# Import necessary models and SQLModel base
+from sqlmodel import SQLModel  # Make sure SQLModel is imported
+import app.models  # Import the package to register models
+
+# Ensure all model modules are imported by app.models.__init__.py
+# --- END: Ensure models are registered ---
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -39,7 +50,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Set the base metadata object - Use the imported correct Base class
-target_metadata = InDBBase.metadata
+target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired: my_important_option = config.get_main_option("my_important_option")
@@ -69,10 +80,10 @@ def run_migrations_offline() -> None:
     """
     url = get_url()
     context.configure(
-        url = url,
-        target_metadata = target_metadata,
-        literal_binds = True,
-        dialect_opts = {"paramstyle": "named"},
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
     )
 
     with context.begin_transaction():
@@ -81,32 +92,51 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
+    MODIFIED FOR DEVELOPMENT: Drops and recreates all tables based on current models.
     """
-    # Get the database URL from the environment
-    # This replaces the need for config.get_main_option("sqlalchemy.url")
-    # as alembic.ini now just holds placeholders
     db_url = get_url()
-
-    # --- Debug Print --- 
-    # print(f"DEBUG: Connecting to DB URL: {db_url}")
-    # --- End Debug Print ---
-
-    connectable = engine_from_config(
-        # Use a dummy config section, as we provide the URL directly
+    engine = engine_from_config(
         {"sqlalchemy.url": db_url},
-        prefix = "sqlalchemy.",
-        poolclass = pool.NullPool,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        context.configure(connection = connection, target_metadata = target_metadata)
+    with engine.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
 
-        with context.begin_transaction():
-            context.run_migrations()
+        # --- START MODIFICATION for DEV MODE ---
+        print("Development mode: Dropping all tables...")
+        # Drop all tables defined in the metadata
+        target_metadata.drop_all(bind=engine)
+        # Optionally, handle extensions or specific schemas if needed:
+        # with context.begin_transaction():
+        #    context.execute(text('DROP SCHEMA public CASCADE; CREATE SCHEMA public;'))
+        print("Tables dropped.")
+
+        print("Creating all tables based on models...")
+        # Create all tables defined in the metadata
+        target_metadata.create_all(bind=engine)
+        print("Tables created.")
+
+        # Optional: Stamp the database with the latest revision ID
+        # This makes Alembic think migrations are up-to-date.
+        # Useful if you have other tools checking alembic status.
+        # from alembic.script import ScriptDirectory
+        # script = ScriptDirectory.from_config(config)
+        # head_revision = script.get_current_head()
+        # if head_revision:
+        #    with context.begin_transaction():
+        #        context.stamp(script, head_revision)
+        #    print(f"Stamped database with head revision: {head_revision}")
+        # else:
+        #    print("No head revision found to stamp.")
+
+        print("Development migration: Database reset complete.")
+        # --- END MODIFICATION for DEV MODE ---
+
+        # Comment out the original migration execution for online mode
+        # with context.begin_transaction():
+        #     context.run_migrations()
 
 
 if context.is_offline_mode():

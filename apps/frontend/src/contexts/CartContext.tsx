@@ -36,7 +36,9 @@ const initialState: CartState = {
 };
 
 // Create Context with undefined default, provider will supply value
-const CartContext = createContext<CartContextValue | undefined>(undefined);
+export const CartContext = createContext<CartContextValue | undefined>(
+  undefined
+);
 
 // Create Provider Component
 interface CartProviderProps {
@@ -269,60 +271,22 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
 
+// Custom hook for consuming the context
 /**
- * Hook to access the Cart context.
- * Throws error if used outside of CartProvider.
- * Uses useContextSelector for performance optimization.
- * @template T The type of the selected state slice.
- * @param {(state: CartContextValue) => T} selector Function to select a slice of the context state.
- * @returns {T} The selected state slice.
+ * @description Hook to access the Cart context.
+ * Provides cart data, loading/error states, and cart manipulation actions.
+ * Throws an error if used outside of CartProvider.
+ * @returns {CartContextValue} The cart context value.
  */
-export const useCart = <T,>(selector: (state: CartContextValue) => T): T => {
-  // Context type here should be CartContextValue | undefined
-  const context = useContextSelector(CartContext, (context) => {
-    // Check if context is undefined (meaning not within provider)
-    if (context === undefined) {
-      throw new Error("useCart must be used within a CartProvider");
-    }
-    // If context exists, apply the selector
-    return selector(context);
-  });
-  // The selector is applied inside, so the result T is returned
+export const useCart = (): CartContextValue => {
+  // Switch from useContextSelector to standard useContext
+  // const context = useContextSelector(CartContext, (v) => v);
+
+  // Using direct useContext:
+  const context = React.useContext(CartContext);
+
+  if (context === undefined) {
+    throw new Error("useCart must be used within a CartProvider");
+  }
   return context;
-};
-
-/**
- * Hook to get only the total number of items in the cart.
- */
-export const useCartTotalItems = (): number => {
-  // Select totalItems from the CartContextValue
-  return useCart((state) => state.totalItems);
-};
-
-/**
- * Hook to get only the array of items in the cart.
- */
-export const useCartItems = (): CartItem[] => {
-  // Select items from the cart property within CartContextValue
-  return useCart((state) => state.cart?.items || []);
-};
-
-/**
- * Hook to get the cart loading state from SWR.
- */
-export const useCartIsLoading = (): boolean => {
-  return useCart((state) => state.isLoading);
-};
-
-/**
- * Hook to get the cart mutation state.
- */
-export const useCartMutationState = (): {
-  isMutating: boolean;
-  mutationError: string | null;
-} => {
-  return useCart((state) => ({
-    isMutating: state.isMutating,
-    mutationError: state.mutationError,
-  }));
 };

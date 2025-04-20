@@ -1,6 +1,8 @@
+# Third-party imports
 from faker import Faker
 from fastapi.testclient import TestClient
 
+# First-party imports
 from app.core.config import settings
 from app.models.item import Item, ItemCreate, ItemUpdate
 from app.schemas.auth import Token

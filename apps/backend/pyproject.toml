@@ -16,6 +16,7 @@ dependencies = [
     "psycopg>=3.2.4",
     "typing-extensions>=4.6.0",
     "python-slugify>=8.0.4",
+    "resend>=2.7.0",
 ]
 
 [dependency-groups]

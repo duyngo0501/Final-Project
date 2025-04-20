@@ -1,84 +1,62 @@
-import { useState, useEffect } from "react";
-import { Outlet, useLocation, Link } from "react-router-dom";
-import ProLayout, { PageContainer } from "@ant-design/pro-layout";
-import { ConfigProvider, theme } from "antd";
-import {
-  HomeOutlined,
-  ShopOutlined,
-  ShoppingCartOutlined,
-  UserOutlined,
-  LoginOutlined,
-} from "@ant-design/icons";
-import Header from "@/components/Header";
+import { Outlet, useLocation } from "react-router-dom";
+import { ConfigProvider, Layout, theme } from "antd";
+import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/Footer";
-import { useAuth } from "@/contexts/AuthContext";
+
+const { Content, Header: AntHeader, Footer: AntFooter } = Layout;
 
 /**
- * Main application layout using Ant Design ProLayout.
- * Integrates custom Header and Footer, provides basic navigation,
- * and renders page content via Outlet.
+ * Main application layout using standard Ant Design Layout.
+ * Provides Header (Navbar), Content (Outlet), and Footer.
  * @returns {JSX.Element} The rendered main layout.
  */
 const MainLayout = (): JSX.Element => {
-  const location = useLocation();
-  const isAuthenticated = useAuth((state) => state.isAuthenticated);
-  const { token } = theme.useToken(); // Access theme tokens
-
-  // Basic menu items - can be expanded or made dynamic later
-  const menuItems = [
-    { path: "/", name: "Home", icon: <HomeOutlined /> },
-    { path: "/games", name: "Games", icon: <ShopOutlined /> },
-    { path: "/cart", name: "Cart", icon: <ShoppingCartOutlined /> },
-    ...(isAuthenticated
-      ? [{ path: "/profile", name: "Profile", icon: <UserOutlined /> }]
-      : [{ path: "/login", name: "Login", icon: <LoginOutlined /> }]),
-  ];
+  const { token } = theme.useToken(); // Access theme tokens for styling
 
   return (
-    <div style={{ height: "100vh", overflow: "auto" }}>
-      <ConfigProvider
-        theme={{
-          components: {
-            Layout: {
-              headerBg: token.colorFillSecondary, // Use a theme token for gray header background
-              // ProLayout might not directly use this, styling headerRender might be needed
-            },
+    <ConfigProvider
+      // Keep theme customization if needed, adjust component names
+      theme={{
+        components: {
+          Layout: {
+            headerBg: token.colorBgContainer, // Standard header background
+            headerPadding: "0 24px", // Adjust padding as needed
+            bodyBg: token.colorBgLayout, // Background for the main content area
           },
-        }}
-      >
-        <ProLayout
-          style={{ minHeight: "100vh" }}
-          layout="mix" // Top navigation + sidebar (can be hidden)
-          title="GameStore"
-          logo={null} // Or add a logo URL/component
-          fixedHeader
-          fixSiderbar // Sidebar fixed, can be hidden if only top nav is needed
-          navTheme="light" // Or "realDark" based on preference
-          contentWidth="Fluid"
-          colorPrimary={token.colorPrimary} // Use primary color from theme
-          location={{
-            pathname: location.pathname, // Sync ProLayout with router location
+        },
+      }}
+    >
+      <Layout style={{ minHeight: "100vh" }}>
+        <AntHeader
+          style={{
+            padding: 0, // Remove default padding if Navbar handles it
+            backgroundColor: token.colorBgContainer,
+            // Add other header styles like position: sticky if desired
+            // position: 'sticky',
+            // top: 0,
+            // zIndex: 10,
+            // width: '100%',
           }}
-          menuDataRender={() => menuItems} // Render basic menu items
-          menuItemRender={(item, dom) => (
-            // Use React Router Link for navigation
-            <Link to={item.path || "/"}>{dom}</Link>
-          )}
-          footerRender={() => <Footer />} // Render custom Footer
-          // Disable elements if not needed (e.g., if only using top nav)
-          // menuRender={false} // Hides the side menu if layout="mix" acts mainly as top nav
-          // Hides the header settings button if not customized
-          actionsRender={false}
-          avatarProps={false}
         >
-          {/* PageContainer provides standard padding and structure */}
-          {/* Removing default padding to let pages control their own */}
-          <PageContainer>
-            <Outlet /> {/* Renders the matched child route */}
-          </PageContainer>
-        </ProLayout>
-      </ConfigProvider>
-    </div>
+          {/* Render the specific Navbar component */}
+          <Navbar />
+        </AntHeader>
+        <Content
+          style={{
+            // Add padding here if needed, or let pages handle it
+            // padding: '24px',
+            backgroundColor: token.colorBgLayout,
+            flex: "1 0 auto", // Ensure content grows
+          }}
+        >
+          <Outlet /> {/* Renders the matched child route */}
+        </Content>
+        <AntFooter style={{ padding: 0, backgroundColor: "transparent" }}>
+          {/* Footer might handle its own background, remove padding */}
+          <Footer />
+        </AntFooter>
+      </Layout>
+    </ConfigProvider>
   );
 };
 

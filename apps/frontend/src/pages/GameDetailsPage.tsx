@@ -1,174 +1,203 @@
-import React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useState } from "react";
+import { useParams } from "react-router-dom";
 import {
   Layout,
   Row,
   Col,
-  Card,
+  Image,
   Typography,
-  Button,
   Spin,
   Alert,
-  Image,
+  Button,
+  InputNumber,
   Tag,
-  Breadcrumb,
+  Rate,
+  Divider,
+  message,
+  Space,
+  Descriptions,
 } from "antd";
-import { ShoppingCartOutlined, ArrowLeftOutlined } from "@ant-design/icons";
-import { useGameDetails } from "../hooks/useGameDetails";
-import { useCart } from "@/contexts/CartContext";
+import { ShoppingCartOutlined } from "@ant-design/icons";
+import { useGameDetails } from "@/hooks/useGameDetails"; // Import the mock hook
+import { useCart } from "@/contexts/CartContext"; // Import cart context
 
 const { Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
 
 /**
- * @description Page component to display details of a specific game.
- * Fetches game data based on ID from URL parameters.
- * @returns {React.FC} The GameDetailsPage component.
+ * @description Displays the detailed information for a single game.
+ * Fetches game data based on the ID from the URL.
+ * Allows adding the game to the cart.
+ * @returns {React.ReactElement} The rendered Game Details page.
  */
 const GameDetailsPage: React.FC = () => {
-  const { gameId } = useParams<{ gameId: string }>();
-  const navigate = useNavigate();
-  const gameIdNum = gameId ? parseInt(gameId, 10) : undefined;
+  const { id } = useParams<{ id: string }>();
+  const gameId = id ? parseInt(id, 10) : undefined;
 
-  const { game, isLoading, isError, isNotFound } = useGameDetails(gameIdNum);
-  const addToCart = useCart((state) => state.addItem);
+  // Ensure gameId is valid before fetching
+  const isValidId = gameId !== undefined && !isNaN(gameId);
+  const { game, isLoading, isError, isNotFound } = useGameDetails(
+    isValidId ? gameId : undefined
+  );
+  const { addItem, isMutating: isCartMutating } = useCart();
+  const [quantity, setQuantity] = useState(1);
 
-  /**
-   * @description Handles adding the current game to the cart.
-   */
-  const handleAddToCart = () => {
-    if (game) {
-      addToCart(game); // Pass the whole game object or relevant parts
-      // Optionally: Show notification, navigate to cart, etc.
-      console.log("Added to cart:", game.title);
+  const handleAddToCart = async () => {
+    if (!game) return;
+    try {
+      await addItem(game, quantity);
+      message.success(`${quantity} x ${game.title} added to cart!`);
+    } catch (err) {
+      console.error("Failed to add item:", err);
+      message.error("Failed to add item to cart. Please try again.");
     }
   };
 
+  // --- Render Logic ---
+  if (!isValidId) {
+    return (
+      <Alert
+        message="Invalid Game ID"
+        description="The game ID in the URL is missing or invalid."
+        type="error"
+        showIcon
+        style={{ margin: "50px" }}
+      />
+    );
+  }
+
   if (isLoading) {
     return (
-      <Layout
-        style={{
-          minHeight: "80vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
+      <div style={{ textAlign: "center", padding: "100px" }}>
         <Spin size="large" />
-      </Layout>
+      </div>
     );
   }
 
   if (isError) {
     return (
-      <Layout style={{ padding: "20px 48px" }}>
-        <Alert
-          message="Error Loading Game Details"
-          description={isError.message || "Could not load game details."}
-          type="error"
-          showIcon
-        />
-        <Button
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(-1)}
-          style={{ marginTop: 16 }}
-        >
-          Go Back
-        </Button>
-      </Layout>
+      <Alert
+        message="Error Loading Game"
+        description={
+          typeof isError === "string"
+            ? isError
+            : "Could not load game details. Please try again."
+        }
+        type="error"
+        showIcon
+        style={{ margin: "50px" }}
+      />
     );
   }
 
   if (isNotFound || !game) {
     return (
-      <Layout style={{ padding: "20px 48px" }}>
-        <Alert
-          message="Game Not Found"
-          description="The requested game could not be found."
-          type="warning"
-          showIcon
-        />
-        <Button
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(-1)}
-          style={{ marginTop: 16 }}
-        >
-          Go Back
-        </Button>
-      </Layout>
+      <Alert
+        message="Game Not Found"
+        description={`Game with ID ${gameId} could not be found.`}
+        type="warning"
+        showIcon
+        style={{ margin: "50px" }}
+      />
     );
   }
 
-  // If game data is available
+  const hasDiscount =
+    typeof game.discountedPrice === "number" &&
+    game.discountedPrice < game.price;
+
   return (
-    <Layout>
-      <Content style={{ padding: "20px 48px" }}>
-        <Breadcrumb style={{ marginBottom: "16px" }}>
-          <Breadcrumb.Item>
-            <a onClick={() => navigate("/")} style={{ cursor: "pointer" }}>
-              Home
-            </a>
-          </Breadcrumb.Item>
-          <Breadcrumb.Item>
-            <a onClick={() => navigate("/games")} style={{ cursor: "pointer" }}>
-              Games
-            </a>
-          </Breadcrumb.Item>
-          <Breadcrumb.Item>{game.title}</Breadcrumb.Item>
-        </Breadcrumb>
+    <Layout style={{ padding: "24px 0", background: "#fff" }}>
+      <Content style={{ padding: "0 50px" }}>
+        <Row gutter={[32, 32]}>
+          {/* Left Column: Image */}
+          <Col xs={24} md={10} lg={8}>
+            <Image
+              width="100%"
+              // Use cat API if thumbnail is the placeholder, otherwise use thumbnail
+              src={
+                game.thumbnail === "/placeholder-image.jpg"
+                  ? `https://cataas.com/cat/says/game-${game.id}?width=400&height=300` // Adjust size hint
+                  : game.thumbnail
+              }
+              alt={game.title}
+              fallback="/placeholder-image.jpg"
+            />
+            {/* TODO: Add thumbnail gallery if multiple images exist */}
+          </Col>
 
-        <Button
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(-1)}
-          style={{ marginBottom: 16 }}
-        >
-          Back to Games
-        </Button>
+          {/* Right Column: Details & Actions */}
+          <Col xs={24} md={14} lg={16}>
+            <Title level={2}>{game.title}</Title>
+            <Space wrap style={{ marginBottom: "16px" }}>
+              <Tag color="blue">{game.category}</Tag>
+              {game.rating && (
+                <Rate disabled allowHalf defaultValue={game.rating} />
+              )}
+              {/* Add platform tags if available? */}
+            </Space>
 
-        <Card>
-          <Row gutter={[32, 32]}>
-            <Col xs={24} md={10} lg={8}>
-              {/* Use Ant Design Image for preview capabilities */}
-              <Image
-                width="100%"
-                src={game.thumbnail || "/images/placeholder.png"} // Provide a placeholder
-                alt={game.title}
-                preview={{
-                  mask: <ShoppingCartOutlined />, // Just an example icon
-                }}
-              />
-            </Col>
-            <Col xs={24} md={14} lg={16}>
-              <Title level={2}>{game.title}</Title>
-              <Tag color="blue" style={{ marginBottom: 16 }}>
-                {game.category?.toUpperCase()}
-              </Tag>
-              <Paragraph>
-                {game.description || "No description available."}
+            {game.description && (
+              <Paragraph type="secondary" style={{ marginBottom: "24px" }}>
+                {game.description}
               </Paragraph>
-              <div style={{ marginBottom: 24 }}>
-                <Text strong style={{ fontSize: "1.5em", marginRight: "10px" }}>
+            )}
+
+            <Divider />
+
+            {/* Price Display */}
+            <div style={{ marginBottom: "24px" }}>
+              {hasDiscount ? (
+                <Space align="baseline">
+                  <Text strong style={{ fontSize: "1.8em", color: "#f5222d" }}>
+                    ${game.discountedPrice?.toFixed(2)}
+                  </Text>
+                  <Text delete type="secondary" style={{ fontSize: "1.2em" }}>
+                    ${game.price.toFixed(2)}
+                  </Text>
+                </Space>
+              ) : (
+                <Text strong style={{ fontSize: "1.8em" }}>
                   ${game.price.toFixed(2)}
                 </Text>
-                {game.discountedPrice && game.discountedPrice < game.price && (
-                  <Text delete type="secondary" style={{ fontSize: "1.2em" }}>
-                    ${game.discountedPrice.toFixed(2)}
-                  </Text>
-                )}
-                {game.price === 0 && <Tag color="green">FREE</Tag>}
-              </div>
+              )}
+            </div>
+
+            {/* Actions: Quantity & Add to Cart */}
+            <Space align="center">
+              <InputNumber
+                min={1}
+                max={10} // Or based on stock if available
+                value={quantity}
+                onChange={(value) => setQuantity(value || 1)}
+                size="large"
+                style={{ width: "80px" }}
+              />
               <Button
                 type="primary"
                 icon={<ShoppingCartOutlined />}
                 size="large"
                 onClick={handleAddToCart}
+                loading={isCartMutating}
+                disabled={isCartMutating}
               >
                 Add to Cart
               </Button>
-              {/* Add more details like platform, genre, ratings, screenshots etc. later */}
-            </Col>
-          </Row>
-        </Card>
+            </Space>
+
+            <Divider />
+
+            {/* Other Details (Optional) */}
+            <Descriptions column={1} size="small">
+              {game.releaseDate && (
+                <Descriptions.Item label="Release Date">
+                  {new Date(game.releaseDate).toLocaleDateString()}
+                </Descriptions.Item>
+              )}
+              {/* Add Developer, Publisher, etc. if available */}
+            </Descriptions>
+          </Col>
+        </Row>
       </Content>
     </Layout>
   );

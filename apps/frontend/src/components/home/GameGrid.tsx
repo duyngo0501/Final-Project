@@ -2,6 +2,14 @@ import React from "react";
 import { Row, Col, Card, Button, Typography, Image, Tag } from "antd";
 import { ShoppingCartOutlined } from "@ant-design/icons";
 import { Game } from "@/types/game"; // Import shared Game type using alias
+import GameCard from "@/components/game/GameCard"; // <-- Import GameCard
+import {
+  FixedSizeGrid as VirtualGrid,
+  FixedSizeList as VirtualList,
+  GridChildComponentProps,
+  ListChildComponentProps,
+} from "react-window";
+import { Link } from "react-router-dom"; // Import Link for card navigation
 
 const { Meta } = Card;
 const { Text, Paragraph } = Typography;
@@ -9,18 +17,24 @@ const { Text, Paragraph } = Typography;
 interface GameGridProps {
   games: Game[]; // Use imported Game type
   onQuickBuy: (game: Game) => void; // Use imported Game type
+  isCartMutating?: boolean; // Add prop to accept cart loading state
+  /**
+   * View mode for the grid: 'grid' (default) or 'list'.
+   */
+  viewMode?: "grid" | "list";
 }
 
 /**
- * @description Displays a grid of game cards.
- * Each card shows game thumbnail, title, price (with discount if applicable),
- * and a quick buy button.
- * @param {GameGridProps} props Component props.
- * @param {Game[]} props.games Array of game objects to display.
- * @param {function} props.onQuickBuy Callback function invoked with the full game object when quick buy button is clicked.
- * @returns {React.FC<GameGridProps>} The GameGrid component.
+ * @description Displays a grid or list of game cards, with virtualization for performance.
+ * @param {GameGridProps} props
+ * @returns {React.FC<GameGridProps>}
  */
-const GameGrid: React.FC<GameGridProps> = ({ games, onQuickBuy }) => {
+const GameGrid: React.FC<GameGridProps> = ({
+  games,
+  onQuickBuy,
+  isCartMutating, // Destructure the new prop
+  viewMode = "grid",
+}) => {
   if (!games || games.length === 0) {
     return (
       <Paragraph style={{ textAlign: "center", padding: "50px" }}>
@@ -29,68 +43,61 @@ const GameGrid: React.FC<GameGridProps> = ({ games, onQuickBuy }) => {
     );
   }
 
+  // Virtualization settings
+  const CARD_HEIGHT = 320;
+  const CARD_WIDTH = 260;
+  const LIST_HEIGHT = 400;
+  const GRID_HEIGHT = 800;
+  const GRID_COLS = 4;
+
+  // Render a single card (for both grid and list)
+  const renderCard = (game: Game) => (
+    <Link to={`/games/${game.id}`} style={{ textDecoration: "none" }}>
+      <GameCard
+        game={game} // Pass game data
+        onAddToCart={onQuickBuy} // Pass the quick buy handler
+        isAddingToCart={isCartMutating} // Pass down the loading state
+      />
+    </Link>
+  );
+
+  if (viewMode === "list") {
+    // Virtualized list view
+    return (
+      <VirtualList
+        height={LIST_HEIGHT}
+        itemCount={games.length}
+        itemSize={CARD_HEIGHT}
+        width={"100%"}
+      >
+        {({ index, style }: ListChildComponentProps) => (
+          <div style={{ ...style, padding: 8 }}>{renderCard(games[index])}</div>
+        )}
+      </VirtualList>
+    );
+  }
+
+  // Virtualized grid view
+  const rowCount = Math.ceil(games.length / GRID_COLS);
   return (
-    <Row gutter={[16, 16]}>
-      {" "}
-      // Adjust gutter as needed
-      {games.map((game) => (
-        <Col key={game.id} xs={24} sm={12} md={8} lg={6}>
-          {" "}
-          {/* Adjust column spans for responsiveness */}
-          <Card
-            hoverable
-            cover={
-              <Image
-                alt={game.title}
-                src={
-                  game.thumbnail ||
-                  "https://via.placeholder.com/300x200?text=No+Image"
-                } // Placeholder image
-                style={{ height: 200, objectFit: "cover" }}
-                preview={false}
-              />
-            }
-            actions={[
-              <Button
-                type="primary"
-                icon={<ShoppingCartOutlined />}
-                onClick={(e) => {
-                  e.stopPropagation(); // Prevent card click if button is clicked
-                  onQuickBuy(game);
-                }}
-              >
-                Quick Buy
-              </Button>,
-            ]}
-          >
-            <Meta
-              title={game.title}
-              description={
-                <>
-                  {game.discountedPrice !== undefined ? (
-                    <div>
-                      <Text delete type="secondary" style={{ marginRight: 8 }}>
-                        ${game.price.toFixed(2)}
-                      </Text>
-                      <Text strong type="danger">
-                        ${game.discountedPrice.toFixed(2)}
-                      </Text>
-                      <Tag color="red" style={{ marginLeft: 8 }}>
-                        Sale
-                      </Tag>
-                    </div>
-                  ) : (
-                    <Text strong>${game.price.toFixed(2)}</Text>
-                  )}
-                  {/* Optional: Add a short description here if available */}
-                  {/* <Paragraph ellipsis={{ rows: 2 }} style={{ marginTop: 8 }}>{game.description || ''}</Paragraph> */}
-                </>
-              }
-            />
-          </Card>
-        </Col>
-      ))}
-    </Row>
+    <VirtualGrid
+      columnCount={GRID_COLS}
+      columnWidth={CARD_WIDTH}
+      height={GRID_HEIGHT}
+      rowCount={rowCount}
+      rowHeight={CARD_HEIGHT}
+      width={CARD_WIDTH * GRID_COLS + 32}
+    >
+      {({ columnIndex, rowIndex, style }: GridChildComponentProps) => {
+        const gameIndex = rowIndex * GRID_COLS + columnIndex;
+        if (gameIndex >= games.length) return null;
+        return (
+          <div style={{ ...style, padding: 8 }}>
+            {renderCard(games[gameIndex])}
+          </div>
+        );
+      }}
+    </VirtualGrid>
   );
 };
 

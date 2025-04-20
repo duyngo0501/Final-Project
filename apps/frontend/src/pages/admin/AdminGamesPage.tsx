@@ -9,7 +9,6 @@ import {
   Alert,
   Row,
   Modal,
-  Form,
   message,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
@@ -29,76 +28,60 @@ interface AdminGame extends Game {
 }
 
 /**
- * @description Admin page for viewing and managing games.
+ * @description Admin page for viewing and managing games with CRUD operations.
  * @returns {React.FC} The AdminGamesPage component.
  */
 const AdminGamesPage: React.FC = () => {
-  const { games, isLoading, isError, mutate } = useGames(); // Get mutate from useGames if available for optimistic updates
+  const { games, isLoading, error: isError, mutate } = useGames();
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingGame, setEditingGame] = useState<Partial<AdminGame> | null>(
-    null
-  ); // Use Partial for Add case
+  const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Use Ant Design form instance
-  const [form] = Form.useForm();
-
-  // --- Modal and Form Handlers ---
+  // --- Modal Handlers ---
   const showAddModal = () => {
-    setEditingGame(null); // Ensure it's an add operation
-    form.resetFields(); // Reset form fields for add
+    setEditingGame(null);
     setIsModalVisible(true);
   };
 
-  const showEditModal = (game: AdminGame) => {
-    setEditingGame(game); // Set the game being edited
-    form.setFieldsValue(game); // Populate form with game data
+  const showEditModal = (game: Game) => {
+    setEditingGame(game);
     setIsModalVisible(true);
   };
 
   const handleCancel = () => {
     setIsModalVisible(false);
     setEditingGame(null);
-    form.resetFields(); // Reset form on cancel
   };
 
   /**
    * @description Handles the submission of the GameForm (Add or Edit).
-   * @param {GameFormValues} values Form values from GameForm.
+   * @param {GameFormValues} values Processed form values from GameForm.
    */
   const handleFormSubmit = async (values: GameFormValues) => {
     setIsSubmitting(true);
-    console.log("Submitting Game:", values);
-    const gameData = { ...values, id: editingGame?.id || Date.now() }; // Assign existing ID or generate one for mock
+    console.log("Submitting Game (Processed Values):", values);
 
     try {
       // --- Mock API Call --- (Replace with actual API)
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      if (editingGame?.id) {
+      if (editingGame) {
         // Mock Update
-        console.log("[Mock API] Updating game:", gameData);
-        // TODO: Call actual update API: await gamesAdminAPI.updateGame(editingGame.id, gameData);
-        message.success(`Game '${gameData.title}' updated successfully!`);
+        const updatedGameData = { ...values, id: editingGame.id }; // Use editingGame.id
+        console.log("[Mock API] Updating game:", updatedGameData);
+        // TODO: Call actual update API: await gamesAdminAPI.updateGame(editingGame.id, updatedGameData);
+        message.success(`Game '${values.title}' updated successfully!`);
       } else {
         // Mock Add
-        console.log("[Mock API] Adding new game:", gameData);
-        // TODO: Call actual add API: await gamesAdminAPI.addGame(gameData);
-        message.success(`Game '${gameData.title}' added successfully!`);
+        const newGameData = { ...values, id: Date.now() }; // Generate temp ID
+        console.log("[Mock API] Adding new game:", newGameData);
+        // TODO: Call actual add API: await gamesAdminAPI.addGame(newGameData);
+        message.success(`Game '${values.title}' added successfully!`);
       }
       // --- End Mock API Call ---
 
-      // TODO: Trigger SWR revalidation if using mock or direct API
-      if (mutate) {
-        // Mutate the useGames data to reflect changes without full reload
-        // This requires the mock API to update the underlying source OR
-        // implementing optimistic updates within useGames or here.
-        // Simple revalidation for now:
-        mutate();
-      }
-
+      mutate?.(); // Revalidate data
       setIsModalVisible(false);
       setEditingGame(null);
-      form.resetFields();
     } catch (error: any) {
       console.error("Failed to save game:", error);
       message.error(error.message || "Failed to save game. Please try again.");
@@ -108,76 +91,84 @@ const AdminGamesPage: React.FC = () => {
   };
 
   // --- Delete Handler ---
-  const handleDeleteGame = (game: AdminGame) => {
+  const handleDeleteGame = (game: Game) => {
     Modal.confirm({
       title: `Delete Game: ${game.title}?`,
-      content:
-        "Are you sure you want to delete this game? This action cannot be undone.",
+      content: "Are you sure? This cannot be undone.",
       okText: "Delete",
       okType: "danger",
-      cancelText: "Cancel",
       onOk: async () => {
         try {
-          setIsSubmitting(true); // Use same flag for visual feedback
-          // --- Mock API Call ---
+          // Note: Consider using a different loading state for delete if needed
+          // setIsDeleting(true);
           console.log("[Mock API] Deleting game:", game.id);
           await new Promise((resolve) => setTimeout(resolve, 500));
           // TODO: Call actual delete API: await gamesAdminAPI.deleteGame(game.id);
           message.success(`Game '${game.title}' deleted successfully!`);
-          // --- End Mock API Call ---
-          if (mutate) mutate(); // Revalidate data
+          mutate?.(); // Revalidate data
         } catch (error: any) {
           console.error("Failed to delete game:", error);
           message.error(error.message || "Failed to delete game.");
         } finally {
-          setIsSubmitting(false);
+          // setIsDeleting(false);
         }
       },
     });
   };
 
   // Define table columns
-  const columns: ColumnsType<AdminGame> = [
+  const columns: ColumnsType<Game> = [
     {
       title: "ID",
       dataIndex: "id",
       key: "id",
       width: 80,
-      sorter: (a: AdminGame, b: AdminGame) => a.id - b.id,
+      sorter: (a, b) => a.id - b.id,
     },
     {
       title: "Title",
       dataIndex: "title",
       key: "title",
-      sorter: (a: AdminGame, b: AdminGame) => a.title.localeCompare(b.title),
+      sorter: (a, b) => a.title.localeCompare(b.title),
     },
-    {
-      title: "Category",
-      dataIndex: "category",
-      key: "category",
-      width: 120,
-      filters: [
-        { text: "PC", value: "pc" },
-        { text: "Console", value: "console" },
-        { text: "Mobile", value: "mobile" },
-      ],
-      onFilter: (value: any, record: AdminGame) => record.category === value,
-    },
+    { title: "Category", dataIndex: "category", key: "category", width: 120 },
     {
       title: "Price",
       dataIndex: "price",
       key: "price",
       width: 120,
-      sorter: (a: AdminGame, b: AdminGame) => a.price - b.price,
-      render: (price: number) => `$${price.toFixed(2)}`, // Basic formatting
+      render: (price: number, record: Game) => (
+        <span>
+          {record.discountedPrice !== undefined &&
+          record.discountedPrice !== null ? (
+            <span>
+              <span
+                style={{
+                  textDecoration: "line-through",
+                  marginRight: "5px",
+                  color: "#888",
+                }}
+              >
+                ${price.toFixed(2)}
+              </span>
+              <span style={{ color: "#f5222d" }}>
+                ${record.discountedPrice.toFixed(2)}
+              </span>
+            </span>
+          ) : (
+            `$${price.toFixed(2)}`
+          )}
+        </span>
+      ),
+      sorter: (a: Game, b: Game) => a.price - b.price,
     },
     {
       title: "Actions",
       key: "actions",
       width: 150,
       align: "center" as const,
-      render: (_: any, record: AdminGame) => (
-        <Space size="middle">
+      render: (_: any, record: Game) => (
+        <Space size="small">
           <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
             Edit
           </Button>
@@ -185,6 +176,8 @@ const AdminGamesPage: React.FC = () => {
             danger
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteGame(record)}
+            // Consider adding loading state here if delete takes time
+            // loading={isDeleting && deletingId === record.id}
           >
             Delete
           </Button>
@@ -194,7 +187,7 @@ const AdminGamesPage: React.FC = () => {
   ];
 
   return (
-    <Layout>
+    <Layout style={{ padding: 16 }}>
       <Content>
         <Row
           justify="space-between"
@@ -209,42 +202,43 @@ const AdminGamesPage: React.FC = () => {
           </Button>
         </Row>
 
-        {isError && (
-          <Alert
-            message="Error loading games"
-            description={isError.message || "Failed to fetch game data."}
-            type="error"
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-        )}
+        {/* {isError && (
+          <Alert 
+            message="Error loading games" 
+            description={ typeof isError === 'string' ? isError : "Failed to fetch game data."}
+            type="error" 
+            showIcon 
+            style={{ marginBottom: 16 }} 
+           />
+        )} */}
 
         <Table
           columns={columns}
-          dataSource={(games as AdminGame[]) || []} // Use fetched games for now
+          dataSource={(games as Game[]) || []}
           rowKey="id"
           loading={isLoading}
           bordered
+          size="middle"
         />
 
         {/* Add/Edit Modal */}
         <Modal
-          title={editingGame?.id ? "Edit Game" : "Add New Game"}
-          visible={isModalVisible}
+          title={editingGame ? "Edit Game" : "Add New Game"}
+          open={isModalVisible}
           onCancel={handleCancel}
-          confirmLoading={isSubmitting} // Show loading on OK button
-          // We use the form's submit handler, triggered by the OK button
-          onOk={() => form.submit()} // Trigger form submission
-          destroyOnClose // Destroy form state when modal is closed
-          // okText={editingGame?.id ? "Save Changes" : "Add Game"} // Customize button text
-          // cancelText="Cancel"
+          footer={null} // Remove default footer
+          destroyOnClose
+          width={720}
         >
-          <GameForm
-            formInstance={form} // Pass form instance
-            initialValues={editingGame || undefined}
-            onFinish={handleFormSubmit}
-            isLoading={isSubmitting}
-          />
+          {/* Render GameForm only when modal is intended to be visible */}
+          {isModalVisible && (
+            <GameForm
+              initialValues={editingGame}
+              onFinish={handleFormSubmit}
+              onCancel={handleCancel}
+              isLoading={isSubmitting}
+            />
+          )}
         </Modal>
       </Content>
     </Layout>

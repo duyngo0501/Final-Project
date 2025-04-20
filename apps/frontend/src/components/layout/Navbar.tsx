@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import { Layout, Menu, Input, Badge, Avatar, Dropdown, Space } from "antd";
 import {
   ShoppingCartOutlined,
@@ -6,7 +6,7 @@ import {
   LogoutOutlined,
 } from "@ant-design/icons";
 import { Link, useNavigate } from "react-router-dom";
-import { useCartTotalItems } from "@/contexts/CartContext";
+import { CartContext, useCart } from "@/contexts/CartContext"; // Import context AND useCart hook
 import { useAuth } from "@/contexts/AuthContext"; // Import Auth context hook
 
 const { Header } = Layout;
@@ -19,7 +19,11 @@ const { Search } = Input;
  * @returns {React.FC} The Navbar component.
  */
 const Navbar: React.FC = () => {
-  const totalItems = useCartTotalItems();
+  // Use standard useContext to get the full context value first
+  const cartContext = useContext(CartContext);
+  // Now safely access totalItems, providing a default if context is undefined
+  const totalItems = cartContext?.totalItems ?? 0;
+
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
   const logout = useAuth((state) => state.logout);
   const navigate = useNavigate();

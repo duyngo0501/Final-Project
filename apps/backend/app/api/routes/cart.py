@@ -2,15 +2,22 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import CurrentUser, SessionDep
-from app.crud import crud_cart
-from app.schemas.cart import Cart, CartItem, CartItemCreate, CartItemUpdate
+from ..deps import CurrentUser, SessionDep
+from ...crud import crud_cart
+from ...schemas.cart import (
+    CartItemCreateSchema,
+    CartItemResponseSchema,
+    CartItemUpdateSchema,
+    CartResponseSchema,
+)
 
-router = APIRouter(prefix="/cart", tags=["cart"])
+router = APIRouter()
 
 
-@router.get("/", response_model=Cart)
-async def read_cart(session: SessionDep, current_user: CurrentUser) -> Cart:
+@router.get("/", response_model=CartResponseSchema)
+async def read_cart(
+    session: SessionDep, current_user: CurrentUser
+) -> CartResponseSchema:
     """Retrieve the current user's shopping cart.
 
     Retrieves the cart associated with the authenticated user.
@@ -23,7 +30,7 @@ async def read_cart(session: SessionDep, current_user: CurrentUser) -> Cart:
     Returns:
         The user's cart.
     """
-    user_id = uuid.UUID(current_user.id) # Ensure user ID is UUID
+    user_id = uuid.UUID(current_user.id)  # Ensure user ID is UUID
     cart = crud_cart.cart.get_or_create(session, owner_id=user_id)
     # Eagerly load items if necessary (SQLModel might do this automatically based on schema)
     # For explicit loading with SQLAlchemy (if SQLModel doesn't cover it):
@@ -34,12 +41,12 @@ async def read_cart(session: SessionDep, current_user: CurrentUser) -> Cart:
     return cart
 
 
-@router.post("/items", response_model=CartItem, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/items", response_model=CartItemResponseSchema, status_code=status.HTTP_201_CREATED
+)
 async def add_item_to_cart(
-    item_in: CartItemCreate,
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> CartItem:
+    item_in: CartItemCreateSchema, session: SessionDep, current_user: CurrentUser
+) -> CartItemResponseSchema:
     """Add an item to the shopping cart.
 
     Adds a product with a specified quantity to the user's cart.
@@ -68,13 +75,13 @@ async def add_item_to_cart(
     return cart_item
 
 
-@router.put("/items/{product_id}", response_model=CartItem)
+@router.put("/items/{product_id}", response_model=CartItemResponseSchema)
 async def update_cart_item_quantity(
     product_id: uuid.UUID,
-    item_in: CartItemUpdate,
+    item_in: CartItemUpdateSchema,
     session: SessionDep,
     current_user: CurrentUser,
-) -> CartItem:
+) -> CartItemResponseSchema:
     """Update the quantity of an item in the cart.
 
     Sets the quantity for a specific product in the user's cart.
@@ -106,9 +113,7 @@ async def update_cart_item_quantity(
 
 @router.delete("/items/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_item_from_cart(
-    product_id: uuid.UUID,
-    session: SessionDep,
-    current_user: CurrentUser,
+    product_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
     """Remove an item from the shopping cart.
 
@@ -142,10 +147,7 @@ async def remove_item_from_cart(
 
 
 @router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
-async def clear_cart(
-    session: SessionDep,
-    current_user: CurrentUser,
-) -> None:
+async def clear_cart(session: SessionDep, current_user: CurrentUser) -> None:
     """Clear all items from the shopping cart.
 
     Removes all items associated with the user's cart.
@@ -169,4 +171,4 @@ async def clear_cart(
     crud_cart.cart_item.clear_cart(session, cart_id=user_cart.id)
 
     # No content to return on successful deletion
-    return None 
+    return None

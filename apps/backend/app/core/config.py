@@ -1,3 +1,8 @@
+"""Core application settings and configuration loading.
+
+Handles loading settings from environment variables or .env files using Pydantic.
+"""
+
 import secrets
 import warnings
 from typing import Annotated, Any, Literal
@@ -15,6 +20,20 @@ from typing_extensions import Self
 
 
 def parse_cors(v: Any) -> list[str] | str:
+    """Parses CORS origins from a string or list.
+
+    If the input is a comma-separated string, it splits it into a list.
+    Otherwise, it returns the input if it's already a list or string.
+
+    Args:
+        v: The raw CORS origin value from the environment or settings.
+
+    Returns:
+        A list of origin strings or the original string if already parsed.
+
+    Raises:
+        ValueError: If the value is not a string or list suitable for parsing.
+    """
     if isinstance(v, str) and not v.startswith("["):
         return [i.strip() for i in v.split(",")]
     elif isinstance(v, list | str):
@@ -23,51 +42,77 @@ def parse_cors(v: Any) -> list[str] | str:
 
 
 class Settings(BaseSettings):
-    """auto load config from .env and validate settings"""
+    """Core application settings manager.
 
-    # https://docs.pydantic.dev/latest/concepts/pydantic_settings/#dotenv-env-support
+    Loads configuration from environment variables and/or a .env file,
+    provides validation, and computes derived configuration values like
+    database URIs and CORS origin lists.
+
+    Attributes:
+        model_config: Pydantic settings configuration (e.g., env_file path).
+        API_V1_STR: Base path prefix for API v1 routes.
+        SECRET_KEY: Secret key for signing tokens, etc. Auto-generated if unset.
+        ENVIRONMENT: Deployment environment ('local', 'staging', 'production').
+        BACKEND_CORS_ORIGINS: Configured CORS origins for the backend.
+        PROJECT_NAME: Name of the project.
+        SUPABASE_URL: URL for the Supabase project.
+        SUPABASE_KEY: Service role key for Supabase (admin privileges).
+        POSTGRES_SERVER: Hostname or IP address of the PostgreSQL server.
+        POSTGRES_PORT: Port number for the PostgreSQL server.
+        POSTGRES_USER: Username for the PostgreSQL database.
+        POSTGRES_PASSWORD: Password for the PostgreSQL database.
+        POSTGRES_DB: Name of the PostgreSQL database.
+        FIRST_SUPERUSER: Email/username for the initial superuser.
+        FIRST_SUPERUSER_PASSWORD: Password for the initial superuser.
+    """
+
+    # Pydantic settings configuration
     model_config = SettingsConfigDict(
-        # Path relative to the Current Working Directory (CWD)
-        # Assumes you run uvicorn from the 'backend' directory
-        env_file=".env", 
+        env_file=".env",
         env_ignore_empty=True,
         extra="ignore",
     )
+
+    # API Configuration
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
-    # FRONTEND_HOST: str = "http://localhost:5173"
-    BACKEND_CORS_ORIGINS: Annotated[
-        list[AnyUrl] | str, BeforeValidator(parse_cors)
-    ] = []
+    # CORS Configuration
+    BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = (
+        []
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def all_cors_origins(self) -> list[str]:
-        return (
-            [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS]
-            + [
-                # self.FRONTEND_HOST
-            ]
-        )
+        """Computes the final list of allowed CORS origins, ensuring no trailing slashes.
 
+        Returns:
+            A list of processed origin strings.
+        """
+        return [str(origin).rstrip("/") for origin in self.BACKEND_CORS_ORIGINS]
+
+    # Project Information
     PROJECT_NAME: str
 
-    ## DB
+    # Database Configuration (Supabase & PostgreSQL)
     SUPABASE_URL: str
-    # NOTE: super user key is service_role key instead of the anon key
-    SUPABASE_KEY: str
-
+    SUPABASE_KEY: str  # Service role key expected
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str
-    POSTGRES_PASSWORD: str = ""
-    POSTGRES_DB: str = ""
+    POSTGRES_PASSWORD: str = ""  # Loaded from .env
+    POSTGRES_DB: str = ""  # Loaded from .env
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> PostgresDsn:
+        """Computes the SQLAlchemy database connection DSN string.
+
+        Returns:
+            A validated PostgreSQL DSN for SQLAlchemy.
+        """
         return MultiHostUrl.build(  # type:ignore
             scheme="postgresql+psycopg",
             username=self.POSTGRES_USER,
@@ -77,10 +122,23 @@ class Settings(BaseSettings):
             path=self.POSTGRES_DB,
         )
 
+    # Initial Superuser Configuration
     FIRST_SUPERUSER: str
     FIRST_SUPERUSER_PASSWORD: str
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
+        """Checks if a sensitive setting still uses the default placeholder.
+
+        Warns locally or raises ValueError in other environments if the value
+        is "changethis".
+
+        Args:
+            var_name: The name of the setting variable.
+            value: The value of the setting variable.
+
+        Raises:
+            ValueError: If environment is not 'local' and value is "changethis".
+        """
         if value == "changethis":
             message = (
                 f'The value of {var_name} is "changethis", '
@@ -93,6 +151,13 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
+        """Validates critical secrets are not using default placeholders.
+
+        This Pydantic validator runs after model initialization.
+
+        Returns:
+            The validated Settings instance.
+        """
         self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
         self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
         self._check_default_secret(
@@ -101,4 +166,5 @@ class Settings(BaseSettings):
         return self
 
 
+# Global instance of the settings, loaded on import.
 settings = Settings()

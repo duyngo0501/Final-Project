@@ -149,7 +149,7 @@ const dummyGames: Game[] = [
   {
     id: 118,
     title: "RimWorld",
-    thumbnail: "/images/game18.jpg",
+    thumbnail: "https://cataas.com/cat/says/mock-game-118?width=300&height=180",
     price: 34.99,
     category: "pc",
     description: "A sci-fi colony sim driven by an intelligent AI storyteller.",

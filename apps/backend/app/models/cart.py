@@ -1,49 +1,83 @@
+"""SQLModel definitions for Shopping Cart and Cart Items.
+
+Defines the database models for shopping carts and the items within them,
+including relationships to users and games.
+"""
+
 import uuid
 from typing import TYPE_CHECKING
 
 from sqlmodel import Field, Relationship, SQLModel
 
+# Import User and Game for type hinting
+from .user import UserItem
+
+# from .game import Game # This import might be causing issues if Game isn't defined yet or circular dependency
+
 if TYPE_CHECKING:
-    # Avoid circular imports for type hinting
-    pass  # Assuming product model is separate
-    # from app.models.product import Product # Assuming product model is separate
+    # Use TYPE_CHECKING block for models involved in circular relationships
+    from .game import GameItem
+    from .user import UserItem
 
 
 # CartItem inherits directly from SQLModel, not InDBBase, as its primary key is not its own ID
 # but rather the combination of cart_id and product_id (or it could have its own UUID)
 # Let's give it its own UUID for easier referencing, similar to Item model
-class CartItem(SQLModel, table=True):
-    """Represents an item within a shopping cart in the database."""
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+class CartEntryItem(SQLModel, table=True):
+    """Represents an item entry within a shopping cart in the database.
+
+    Links a specific game to a shopping cart with a defined quantity.
+
+    Attributes:
+        id: The unique identifier for this specific cart entry.
+        quantity: The number of units of the game in the cart.
+        cart_id: Foreign key linking to the ShoppingCartItem (carts table).
+        game_id: Foreign key linking to the GameItem (games table).
+        cart: Relationship back to the parent ShoppingCartItem.
+        game: Relationship to the associated GameItem.
+    """
+
+    __tablename__ = "cart_items"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
     quantity: int = Field(default=1, nullable=False)
 
     # Foreign keys
-    cart_id: uuid.UUID = Field(foreign_key="cart.id", nullable=False, index=True)
-    product_id: uuid.UUID = Field(
-        # Assuming a product table exists with primary key 'id'
-        # foreign_key="product.id", # Uncomment and adjust if Product model exists
-        nullable=False,
-        index=True,
-    )
+    cart_id: uuid.UUID = Field(foreign_key="carts.id", nullable=False, index=True)
+    game_id: uuid.UUID = Field(
+        foreign_key="games.id", nullable=False, index=True
+    )  # Renamed from product_id
 
     # Relationships
-    cart: "Cart" = Relationship(back_populates="items")
-    # product: "Product" = Relationship() # Uncomment if Product model exists
+    cart: "ShoppingCartItem" = Relationship(back_populates="items")
+    game: "GameItem" = Relationship(back_populates="cart_items")
 
 
 # Cart model inherits from InDBBase to get id and owner_id
-class Cart(SQLModel, table=True):
-    """Represents a shopping cart associated with a user."""
-    # Inherits id (PK) and owner_id (FK to auth.users) from InDBBase in DB
-    # But we need to define them here for SQLModel
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    # owner_id: uuid.UUID = Field(
-    #     foreign_key="auth.users.id", nullable=False, index=True, unique=True
-    # ) # Assuming one cart per user
+class ShoppingCartItem(SQLModel, table=True):
+    """Represents a user's shopping cart in the database.
 
-    # Add field to store Supabase user ID directly
-    owner_supabase_id: uuid.UUID = Field(index=True, nullable=False, unique=True) # Assuming one cart per user
+    Each cart is uniquely associated with a user and holds multiple cart items.
+
+    Attributes:
+        id: The unique identifier for the shopping cart.
+        user_id: Foreign key linking to the UserItem (app_users table).
+                 Marked as unique to enforce one cart per user.
+        items: A list of CartEntryItem objects associated with this cart.
+               Configured to cascade deletes.
+        user: Relationship back to the UserItem who owns the cart.
+    """
+
+    __tablename__ = "carts"
+
+    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True, index=True)
+    # Link to our app_users table
+    user_id: uuid.UUID = Field(
+        foreign_key="app_users.id", nullable=False, index=True, unique=True
+    )
 
     # Relationships
-    items: list["CartItem"] = Relationship(back_populates="cart", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
-    # owner: "User" = Relationship() # Define relationship to User if needed elsewhere 
+    items: list["CartEntryItem"] = Relationship(
+        back_populates="cart", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    user: "UserItem" = Relationship(back_populates="cart")

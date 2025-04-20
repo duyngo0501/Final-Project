@@ -1,41 +1,45 @@
+"""Database connection setup and session management.
+
+Configures the SQLAlchemy engine and provides a dependency for database sessions.
+"""
+
 from collections.abc import Generator
 
 from sqlmodel import Session, create_engine
 
 from app.core.config import settings
 
-# from app.models import User # Remove this import - User model was deleted
+# NOTE: Models should be imported elsewhere (e.g., in alembic env.py or crud operations)
+# to ensure SQLModel registers them before any operations.
+# from app.models import User # Example - Removed as User model might be elsewhere
 
-# make sure all SQLModel models are imported (app.models) before initializing DB
-# otherwise, SQLModel might fail to initialize relationships properly
-# for more details: https://github.com/fastapi/full-stack-fastapi-template/issues/28
-
+# Create the database engine using the URI from settings.
+# pool_pre_ping=True enables connection health checks.
 engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI), pool_pre_ping=True)
 
 
-def get_db() -> Generator[Session, None]:
+def get_db() -> Generator[Session, None, None]:
+    """FastAPI dependency that yields a SQLAlchemy session.
+
+    Creates a new SQLModel session for each request and ensures it's closed.
+
+    Yields:
+        Session: The database session for the request context.
+    """
     with Session(engine) as session:
         yield session
 
 
-def init_db(session: Session) -> None:
-    # NOTE: Tables should be created with Alembic migrations
-    # But if you don't want to use migrations, create
-    # the tables uncommenting the next lines
-    # from sqlmodel import SQLModel
+def init_db() -> None:
+    """Initializes the database (placeholder).
 
-    # from app.core.engine import engine
-    # def create_db_and_tables():
-    # SQLModel.metadata.create_all(engine)
+    Note: Database table creation and data seeding should ideally be handled
+          by Alembic migrations rather than this function.
 
-    # user = session.exec(
-    #     select(User).where(User.email == settings.FIRST_SUPERUSER)
-    # ).first()
-    # if not user:
-    #     user_in = UserCreate(
-    #         email=settings.FIRST_SUPERUSER,
-    #         password=settings.FIRST_SUPERUSER_PASSWORD,
-    #         is_superuser=True,
-    #     )
-    #     user = create_user(session=session, user_create=user_in)
-    pass # Nothing to do here if using Alembic
+    If not using Alembic, specific table creation logic (e.g.,
+    `SQLModel.metadata.create_all(engine)`) or initial data seeding
+    could be placed here.
+    """
+    # Currently does nothing, assuming Alembic handles initialization.
+    print("Database initialization function `init_db` called (no-op by default).")
+    pass

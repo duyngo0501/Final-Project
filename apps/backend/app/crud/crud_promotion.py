@@ -7,6 +7,8 @@ from sqlmodel import Session, select
 from app.models.promotion import Promotion
 from app.schemas.promotion import PromotionCreate, PromotionUpdate
 
+# Try importing directly from sibling directories
+
 
 class CRUDPromotion:
     """CRUD operations for Promotion model."""
@@ -14,7 +16,7 @@ class CRUDPromotion:
     def __init__(self, model: type[Promotion]):
         self.model = model
 
-    def get(self, session: Session, *, id: uuid.UUID) -> Promotion | None:
+    def get(self, session: Session, *, id: str) -> Promotion | None:
         """Get a single promotion by id."""
         statement = select(self.model).where(self.model.id == id)
         return session.exec(statement).one_or_none()
@@ -28,7 +30,9 @@ class CRUDPromotion:
         self, session: Session, *, skip: int = 0, limit: int = 100
     ) -> Sequence[Promotion]:
         """Get multiple promotions with pagination (all promotions)."""
-        statement = select(self.model).offset(skip).limit(limit).order_by(self.model.created_at)
+        statement = (
+            select(self.model).offset(skip).limit(limit).order_by(self.model.created_at)
+        )
         return session.exec(statement).all()
 
     def get_multi_active(
@@ -57,14 +61,19 @@ class CRUDPromotion:
             # Or handle differently, e.g., raise HTTPException in the endpoint
             raise ValueError(f"Promotion code '{obj_in.code}' already exists.")
 
-        db_obj = self.model.model_validate(obj_in) # Use model_validate for Pydantic v2
+        db_obj = self.model.model_validate(obj_in)  # Create model instance
+
+        # Generate and assign prefixed ID before adding to session
+        generated_id = f"promo_{uuid.uuid4().hex[:8]}"
+        db_obj.id = generated_id
+
         session.add(db_obj)
         session.commit()
         session.refresh(db_obj)
         return db_obj
 
     def update(
-        self, session: Session, *, id: uuid.UUID, obj_in: PromotionUpdate
+        self, session: Session, *, id: str, obj_in: PromotionUpdate
     ) -> Promotion | None:
         """Update an existing promotion."""
         db_obj = self.get(session, id=id)
@@ -77,7 +86,9 @@ class CRUDPromotion:
         if "code" in update_data and update_data["code"] != db_obj.code:
             existing = self.get_by_code(session, code=update_data["code"])
             if existing:
-                raise ValueError(f"Promotion code '{update_data['code']}' already exists.")
+                raise ValueError(
+                    f"Promotion code '{update_data['code']}' already exists."
+                )
 
         db_obj.sqlmodel_update(update_data)
         session.add(db_obj)
@@ -85,7 +96,7 @@ class CRUDPromotion:
         session.refresh(db_obj)
         return db_obj
 
-    def remove(self, session: Session, *, id: uuid.UUID) -> Promotion | None:
+    def remove(self, session: Session, *, id: str) -> Promotion | None:
         """Remove a promotion."""
         obj = self.get(session, id=id)
         if obj:
@@ -95,4 +106,4 @@ class CRUDPromotion:
 
 
 # Instantiate CRUD object
-promotion = CRUDPromotion(Promotion) 
+promotion = CRUDPromotion(Promotion)

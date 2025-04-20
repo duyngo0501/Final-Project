@@ -64,7 +64,7 @@ const PromotionBanner: React.FC = () => {
             style={{ display: "block", position: "relative" }}
           >
             <Image
-              src={promo.imageUrl}
+              src={`https://cataas.com/cat/says/promo-${promo.id}?width=800&height=300`}
               alt={promo.title}
               preview={false}
               style={{

@@ -64,8 +64,11 @@ const HomePage: React.FC = () => {
             <Alert
               message="Error Loading Games"
               description={
-                isError.message ||
-                "Failed to load games. Please try again later."
+                typeof isError === "object" &&
+                isError !== null &&
+                "message" in isError
+                  ? isError.message
+                  : "Failed to load games. Please try again later."
               }
               type="error"
               showIcon

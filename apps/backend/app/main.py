@@ -1,3 +1,10 @@
+# -- DEVELOPMENT NOTE --
+# An admin bypass token is configured in app/api/deps.py (get_current_admin_user).
+# To test admin-protected endpoints during development, set the Authorization header:
+# Authorization: Bearer DEV_ADMIN_BYPASS_TOKEN
+# REMOVE this bypass logic before production!
+# ----------------------
+
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -63,12 +70,12 @@ if settings.all_cors_origins:
 
 
 # Include the main aggregated router with API version prefix
-app.include_router(api_router, prefix=settings.API_V1_STR) # e.g., prefix="/api/v1"
+app.include_router(api_router, prefix=settings.API_V1_STR)  # e.g., prefix="/api/v1"
 
 
-@app.get("/", tags=["root"])
-async def read_root() -> dict[str, str]:
-    return {"Hello": "World"}
+# @app.get("/", tags=["root"])
+# async def read_root() -> dict[str, str]:
+#     return {"Hello": "World"}
 
 
 # Logger
@@ -77,9 +84,9 @@ def timestamp_log_config(uvicorn_log_config: dict[str, Any]) -> dict[str, Any]:
     datefmt = "%d-%m-%Y %H:%M:%S"
     formatters = uvicorn_log_config["formatters"]
     formatters["default"]["fmt"] = "%(levelprefix)s [%(asctime)s] %(message)s"
-    formatters["access"]["fmt"] = (
-        '%(levelprefix)s [%(asctime)s] %(client_addr)s - "%(request_line)s" %(status_code)s'
-    )
+    formatters["access"][
+        "fmt"
+    ] = '%(levelprefix)s [%(asctime)s] %(client_addr)s - "%(request_line)s" %(status_code)s'
     formatters["access"]["datefmt"] = datefmt
     formatters["default"]["datefmt"] = datefmt
     return uvicorn_log_config

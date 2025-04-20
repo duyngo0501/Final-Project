@@ -2,15 +2,24 @@ import uuid
 
 from sqlmodel import Session, select
 
+# Revert to imports starting from app.
 from app.crud.base import CRUDBase
-from app.models.cart import Cart, CartItem
-from app.schemas.cart import CartCreate, CartItemCreate, CartItemUpdate, CartUpdate
+from app.models.cart import ShoppingCartItem, CartEntryItem
+from app.schemas.cart import (
+    CartCreateSchema,
+    CartItemCreateSchema,
+    CartItemUpdateSchema,
+    CartUpdateSchema,
+    CartResponseSchema,
+)
 
 
-class CRUDCart(CRUDBase[Cart, CartCreate, CartUpdate]):
+class CRUDCart(CRUDBase[ShoppingCartItem, CartCreateSchema, CartUpdateSchema]):
     """CRUD operations for Cart model."""
 
-    def get_by_owner(self, session: Session, *, owner_id: uuid.UUID) -> Cart | None:
+    def get_by_owner(
+        self, session: Session, *, owner_id: uuid.UUID
+    ) -> ShoppingCartItem | None:
         """Gets the cart for a specific owner.
 
         Args:
@@ -23,7 +32,9 @@ class CRUDCart(CRUDBase[Cart, CartCreate, CartUpdate]):
         statement = select(self.model).where(self.model.owner_id == owner_id)
         return session.exec(statement).first()
 
-    def get_or_create(self, session: Session, *, owner_id: uuid.UUID) -> Cart:
+    def get_or_create(
+        self, session: Session, *, owner_id: uuid.UUID
+    ) -> ShoppingCartItem:
         """Gets the cart for an owner, creating one if it doesn't exist.
 
         Args:
@@ -36,22 +47,18 @@ class CRUDCart(CRUDBase[Cart, CartCreate, CartUpdate]):
         cart = self.get_by_owner(session, owner_id=owner_id)
         if not cart:
             # Create CartCreate schema instance (empty in this case)
-            cart_in = CartCreate()
+            cart_in = CartCreateSchema()
             # Use CRUDBase create method
             cart = self.create(session, owner_id=owner_id, obj_in=cart_in)
         return cart
 
 
-class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
+class CRUDCartItem(CRUDBase[CartEntryItem, CartItemCreateSchema, CartItemUpdateSchema]):
     """CRUD operations for CartItem model."""
 
     def get_by_cart_and_product(
-        self,
-        session: Session,
-        *,
-        cart_id: uuid.UUID,
-        product_id: uuid.UUID,
-    ) -> CartItem | None:
+        self, session: Session, *, cart_id: uuid.UUID, product_id: uuid.UUID
+    ) -> CartEntryItem | None:
         """Gets a specific item within a specific cart.
 
         Args:
@@ -68,8 +75,8 @@ class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
         return session.exec(statement).first()
 
     def add_item(
-        self, session: Session, *, cart_id: uuid.UUID, item_in: CartItemCreate
-    ) -> CartItem:
+        self, session: Session, *, cart_id: uuid.UUID, item_in: CartItemCreateSchema
+    ) -> CartEntryItem:
         """Adds an item to the cart or updates quantity if it already exists.
 
         Args:
@@ -103,8 +110,8 @@ class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
         *,
         cart_id: uuid.UUID,
         product_id: uuid.UUID,
-        item_in: CartItemUpdate,
-    ) -> CartItem | None:
+        item_in: CartItemUpdateSchema,
+    ) -> CartEntryItem | None:
         """Updates the quantity of a specific item in a cart.
 
         Args:
@@ -128,7 +135,7 @@ class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
 
     def remove_item(
         self, session: Session, *, cart_id: uuid.UUID, product_id: uuid.UUID
-    ) -> CartItem | None:
+    ) -> CartEntryItem | None:
         """Removes a specific item from a cart.
 
         Args:
@@ -168,5 +175,5 @@ class CRUDCartItem(CRUDBase[CartItem, CartItemCreate, CartItemUpdate]):
 
 
 # Instantiate CRUD objects
-cart = CRUDCart(Cart)
-cart_item = CRUDCartItem(CartItem) 
+cart = CRUDCart(ShoppingCartItem)
+cart_item = CRUDCartItem(CartEntryItem)

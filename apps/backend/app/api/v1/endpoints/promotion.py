@@ -10,7 +10,9 @@ router = APIRouter()
 
 
 @router.get(
-    "/", response_model=Sequence[Promotion], dependencies=[Depends(CurrentUser)] # Require login
+    "/",
+    response_model=Sequence[Promotion],
+    dependencies=[Depends(CurrentUser)],  # Require login
 )
 async def list_active_promotions(
     session: SessionDep,
@@ -34,4 +36,4 @@ async def list_active_promotions(
     promotions = crud_promotion.promotion.get_multi_active(
         session, skip=skip, limit=limit
     )
-    return promotions 
+    return promotions

@@ -1,282 +1,256 @@
-import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React from "react";
+import { Link } from "react-router-dom";
 import {
   Layout,
-  Typography,
-  Table,
-  Button,
-  InputNumber,
-  Image,
-  Space,
-  Divider,
-  Empty,
-  Spin,
-  Alert,
-  Result,
   Row,
   Col,
+  Typography,
+  Button,
+  List,
+  InputNumber,
+  Avatar,
+  Spin,
+  Alert,
   Card,
+  Divider,
+  Empty,
+  Space,
+  Image,
   message,
 } from "antd";
-import { ColumnsType } from "antd/es/table";
-import {
-  DeleteOutlined,
-  ShoppingCartOutlined,
-  ArrowLeftOutlined,
-} from "@ant-design/icons";
-import {
-  useCartItems,
-  useCartIsLoading,
-  useCart,
-  useCartTotalItems,
-  useCartMutationState,
-} from "@/contexts/CartContext";
-import { CartItem } from "@/services/api";
-import { formatCurrency } from "@/utils/helpers";
+import { DeleteOutlined, ShoppingCartOutlined } from "@ant-design/icons";
+import { useCart } from "@/contexts/CartContext";
+import { CartItem } from "@/services/api"; // Assuming type is here
 
 const { Content } = Layout;
-const { Title, Text, Link } = Typography;
+const { Title, Text } = Typography;
 
 /**
- * @description Page component to display and manage the shopping cart.
+ * @description Displays the user's shopping cart, allows item management,
+ * shows price summary, and provides a checkout button.
  * @returns {React.FC} The CartPage component.
  */
 const CartPage: React.FC = () => {
-  const navigate = useNavigate();
-  const items = useCartItems();
-  const isLoading = useCartIsLoading();
-  const { isMutating, mutationError } = useCartMutationState();
-  const { removeItem, updateQuantity, clearCartMutationError } = useCart(
-    (state) => ({
-      removeItem: state.removeItem,
-      updateQuantity: state.updateQuantity,
-      clearCartMutationError: state.clearCartMutationError,
-    })
-  );
+  const {
+    cart,
+    isLoading,
+    error,
+    totalItems,
+    isMutating,
+    removeItem,
+    updateQuantity,
+    clearCart,
+  } = useCart();
 
-  useEffect(() => {
-    if (mutationError) {
-      message.error(mutationError);
-      if (clearCartMutationError) {
-        clearCartMutationError();
-      }
-    }
-  }, [mutationError, clearCartMutationError]);
-
-  const handleQuantityChange = async (gameId: number, value: number | null) => {
-    if (value !== null && value >= 0) {
-      try {
-        await updateQuantity(gameId, value);
-      } catch (e) {
-        console.error("Update quantity failed (caught in handler):", e);
-      }
-    }
-  };
-
-  const handleRemoveItem = async (gameId: number) => {
-    try {
-      await removeItem(gameId);
-      message.success("Item removed from cart");
-    } catch (e) {
-      console.error("Remove item failed (caught in handler):", e);
-    }
-  };
-
-  const cartTotal = React.useMemo(() => {
-    return items.reduce((total, item) => {
-      const price = item.game.discountedPrice ?? item.game.price;
-      return total + price * item.quantity;
-    }, 0);
-  }, [items]);
-
-  const columns: ColumnsType<CartItem> = [
-    {
-      title: "Product",
-      dataIndex: "game",
-      key: "game",
-      render: (game: CartItem["game"]) => (
-        <Space>
-          <Image
-            width={60}
-            src={game.thumbnail || "/images/placeholder.png"}
-            alt={game.title}
-            preview={false}
-            style={{ objectFit: "cover" }}
-          />
-          <Link onClick={() => navigate(`/games/${game.id}`)}>
-            {game.title}
-          </Link>
-        </Space>
-      ),
-    },
-    {
-      title: "Price",
-      dataIndex: ["game", "price"],
-      key: "price",
-      responsive: ["md"],
-      render: (price: number, record: CartItem) => {
-        const displayPrice = record.game.discountedPrice ?? price;
-        return (
-          <Space direction="vertical" size="small">
-            <Text>{formatCurrency(displayPrice)}</Text>
-            {record.game.discountedPrice && (
-              <Text delete type="secondary" style={{ fontSize: "0.9em" }}>
-                {formatCurrency(price)}
-              </Text>
-            )}
-          </Space>
-        );
-      },
-    },
-    {
-      title: "Quantity",
-      dataIndex: "quantity",
-      key: "quantity",
-      render: (quantity: number, record: CartItem) => (
-        <InputNumber<number>
-          min={0}
-          value={quantity}
-          onChange={(value) => handleQuantityChange(record.game.id, value)}
-          style={{ width: 70 }}
-          disabled={isMutating}
-        />
-      ),
-    },
-    {
-      title: "Subtotal",
-      key: "subtotal",
-      align: "right",
-      render: (_: any, record: CartItem) => {
-        const price = record.game.discountedPrice ?? record.game.price;
-        return <Text strong>{formatCurrency(price * record.quantity)}</Text>;
-      },
-    },
-    {
-      title: "Action",
-      key: "action",
-      align: "center",
-      render: (_: any, record: CartItem) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleRemoveItem(record.game.id)}
-          disabled={isMutating}
-        />
-      ),
-    },
-  ];
-
-  if (isLoading && !items.length) {
+  // Calculate total price locally (consider moving to context if complex)
+  const totalPrice = React.useMemo(() => {
     return (
-      <Layout
-        style={{
-          minHeight: "80vh",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
+      cart?.items.reduce((sum, item) => {
+        const price = item.game.discountedPrice ?? item.game.price;
+        return sum + price * item.quantity;
+      }, 0) ?? 0
+    );
+  }, [cart]);
+
+  const handleQuantityChange = async (item: CartItem, quantity: number) => {
+    if (!quantity || quantity < 1) return; // Prevent invalid quantities
+    try {
+      await updateQuantity(item.game.id, quantity);
+      message.success("Quantity updated");
+    } catch (err) {
+      message.error("Failed to update quantity");
+      console.error("Update quantity error:", err);
+    }
+  };
+
+  const handleRemoveItem = async (item: CartItem) => {
+    try {
+      await removeItem(item.game.id);
+      message.success(`${item.game.title} removed from cart`);
+    } catch (err) {
+      message.error("Failed to remove item");
+      console.error("Remove item error:", err);
+    }
+  };
+
+  const handleClearCart = async () => {
+    try {
+      await clearCart();
+      message.success("Cart cleared");
+    } catch (err) {
+      message.error("Failed to clear cart");
+      console.error("Clear cart error:", err);
+    }
+  };
+
+  // Calculate totals
+  const subtotal = totalPrice;
+  // Placeholder calculations
+  const estimatedTax = subtotal * 0.08;
+  const shippingCost = subtotal >= 50 ? 0 : 5.99;
+  const total = subtotal + estimatedTax + shippingCost;
+
+  if (isLoading) {
+    return (
+      <Content style={{ padding: "50px", textAlign: "center" }}>
         <Spin size="large" tip="Loading Cart..." />
-      </Layout>
+      </Content>
     );
   }
 
-  if (!isLoading && items.length === 0) {
+  if (error) {
     return (
-      <Layout
-        style={{ padding: "20px 24px", maxWidth: 1200, margin: "0 auto" }}
-      >
-        <Content
-          style={{
-            background: "#fff",
-            padding: "48px 24px",
-            textAlign: "center",
-          }}
+      <Content style={{ padding: "50px" }}>
+        <Alert
+          message="Error loading cart"
+          description={error.message || "Please try again."}
+          type="error"
+          showIcon
+        />
+      </Content>
+    );
+  }
+
+  if (!cart || cart.items.length === 0) {
+    return (
+      <Content style={{ padding: "50px", textAlign: "center" }}>
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={<Text>Your cart is empty.</Text>}
         >
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <Title level={4} style={{ marginBottom: 24 }}>
-                Your shopping cart is empty.
-              </Title>
-            }
-          />
-          <Button
-            type="primary"
-            size="large"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate("/games")}
-          >
-            Continue Shopping
-          </Button>
-        </Content>
-      </Layout>
+          <Link to="/games">
+            <Button type="primary" icon={<ShoppingCartOutlined />}>
+              Start Shopping
+            </Button>
+          </Link>
+        </Empty>
+      </Content>
     );
   }
 
   return (
-    <Layout>
-      <Content
-        style={{ padding: "20px 24px", maxWidth: 1200, margin: "0 auto" }}
-      >
-        <Button
-          type="link"
-          icon={<ArrowLeftOutlined />}
-          onClick={() => navigate("/games")}
-          style={{ marginBottom: 16, paddingLeft: 0 }}
-        >
-          Continue Shopping
-        </Button>
-
-        <Title level={2} style={{ marginBottom: 24 }}>
-          Shopping Cart
+    <Layout style={{ padding: "24px 0", background: "#fff" }}>
+      <Content style={{ padding: "0 50px" }}>
+        <Title level={2} style={{ marginBottom: "24px" }}>
+          Your Shopping Cart
         </Title>
-
         <Row gutter={[24, 24]}>
+          {/* Cart Items Column */}
           <Col xs={24} lg={16}>
-            <Card bordered={false} style={{ background: "#fff" }}>
-              <Spin
-                spinning={isLoading || isMutating}
-                tip={isMutating ? "Updating Cart..." : "Loading Cart..."}
-              >
-                <Table
-                  columns={columns}
-                  dataSource={items}
-                  rowKey={(item) => item.game.id}
-                  pagination={false}
-                />
-              </Spin>
-            </Card>
+            <List
+              itemLayout="horizontal"
+              dataSource={cart.items}
+              renderItem={(item) => {
+                const price = item.game.discountedPrice ?? item.game.price;
+                return (
+                  <List.Item
+                    actions={[
+                      <InputNumber
+                        min={1}
+                        max={10} // Or stock limit
+                        value={item.quantity}
+                        onChange={(value) =>
+                          handleQuantityChange(item, value || 1)
+                        }
+                        disabled={isMutating}
+                        style={{ width: 60, marginRight: 16 }}
+                      />,
+                      <Text
+                        strong
+                        style={{ minWidth: "80px", textAlign: "right" }}
+                      >
+                        ${(price * item.quantity).toFixed(2)}
+                      </Text>,
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveItem(item)}
+                        disabled={isMutating}
+                        aria-label={`Remove ${item.game.title}`}
+                      />,
+                    ]}
+                  >
+                    <List.Item.Meta
+                      avatar={
+                        <Image
+                          src={
+                            item.game.thumbnail === "/placeholder-image.jpg"
+                              ? `https://cataas.com/cat/says/cart-item-${item.game.id}?width=80&height=80`
+                              : item.game.thumbnail
+                          }
+                          alt={item.game.title}
+                          width={80}
+                          height={80}
+                          style={{ objectFit: "cover" }}
+                          preview={false}
+                          fallback="/placeholder-image.jpg"
+                        />
+                      }
+                      title={
+                        <Link to={`/games/${item.game.id}`}>
+                          {item.game.title}
+                        </Link>
+                      }
+                      description={`$${price.toFixed(2)} each`}
+                    />
+                  </List.Item>
+                );
+              }}
+            />
           </Col>
+
+          {/* Summary Column */}
           <Col xs={24} lg={8}>
-            <Card title="Cart Summary">
+            <Card title="Order Summary">
               <Space
                 direction="vertical"
-                size="middle"
                 style={{ width: "100%" }}
+                size="middle"
               >
                 <Row justify="space-between">
+                  <Text>Subtotal ({totalItems} items)</Text>
+                  <Text strong>${totalPrice.toFixed(2)}</Text>
+                </Row>
+                <Row justify="space-between">
+                  <Text>Estimated Tax:</Text>
+                  <Text>${estimatedTax.toFixed(2)}</Text>
+                </Row>
+                <Row justify="space-between" style={{ marginBottom: 16 }}>
+                  <Text>Shipping:</Text>
                   <Text>
-                    Subtotal ({items.length}{" "}
-                    {items.length === 1 ? "item" : "items"}):
+                    {shippingCost === 0
+                      ? "Free"
+                      : `$${shippingCost.toFixed(2)}`}
                   </Text>
-                  <Text strong>{formatCurrency(cartTotal)}</Text>
                 </Row>
                 <Divider style={{ margin: "12px 0" }} />
                 <Row justify="space-between">
-                  <Title level={4}>Order Total:</Title>
-                  <Title level={4}>{formatCurrency(cartTotal)}</Title>
+                  <Text strong style={{ fontSize: "1.2em" }}>
+                    Total
+                  </Text>
+                  <Text strong style={{ fontSize: "1.2em" }}>
+                    ${total.toFixed(2)}
+                  </Text>
                 </Row>
                 <Button
                   type="primary"
-                  size="large"
-                  icon={<ShoppingCartOutlined />}
                   block
-                  onClick={() => message.info("Checkout not implemented yet!")}
-                  disabled={isMutating || isLoading}
+                  size="large"
+                  disabled // Checkout not implemented
+                  style={{ marginTop: "16px" }}
                 >
                   Proceed to Checkout
+                </Button>
+                <Button
+                  type="default"
+                  block
+                  danger
+                  onClick={handleClearCart}
+                  disabled={isMutating}
+                  loading={isMutating}
+                >
+                  Clear Cart
                 </Button>
               </Space>
             </Card>

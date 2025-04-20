@@ -1,5 +1,6 @@
-import useSWR from "swr";
+import { useState, useEffect } from "react";
 import { Game } from "@/types/game";
+import useSWR from "swr";
 
 // TODO: Consider centralizing or fetching this dummy data if used in multiple places
 const dummyGames: Game[] = [
@@ -148,7 +149,7 @@ const dummyGames: Game[] = [
   {
     id: 118,
     title: "RimWorld",
-    thumbnail: "/images/game18.jpg",
+    thumbnail: "https://cataas.com/cat/says/mock-game-118?width=300&height=180",
     price: 34.99,
     category: "pc",
     description: "A sci-fi colony sim driven by an intelligent AI storyteller.",
@@ -210,3 +211,63 @@ export const useGameDetails = (gameId: number | undefined) => {
     isNotFound, // Explicitly indicate if fetch completed but found nothing
   };
 };
+
+/**
+ * Simulates fetching a single game by ID (mocked, no API call).
+ * @param {number} id - The ID of the game to fetch.
+ * @returns {Promise<Game | null>} The mock game data or null if not found.
+ */
+const mockFetchGameById = async (id: number): Promise<Game | null> => {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const mockGame: Game = {
+    id: id,
+    title: `Awesome Game ${id}`,
+    thumbnail: `https://via.placeholder.com/600x400/808080/FFFFFF?text=Game+${id}+Large`,
+    price: Math.floor(Math.random() * 50) + 10,
+    discountedPrice:
+      id % 3 === 0 ? Math.floor(Math.random() * 10) + 5 : undefined,
+    category: ["Action", "Adventure", "RPG", "Strategy", "Simulation"][id % 5],
+    description: `This is the detailed description for Awesome Game ${id}. It features engaging gameplay, stunning visuals...`,
+  };
+  if (id > 50) return null;
+  return mockGame;
+};
+
+/**
+ * React hook to fetch game details by ID (mocked).
+ * @param {number | undefined} id - The ID of the game to fetch.
+ * @returns {{ game: Game | null, loading: boolean, error: string | null }}
+ */
+export function useGameDetailsMock(id: number | undefined) {
+  const [game, setGame] = useState<Game | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (id === undefined) {
+      setError("Game ID is missing.");
+      setLoading(false);
+      setGame(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setGame(null);
+    mockFetchGameById(id)
+      .then((data) => {
+        if (data) {
+          setGame(data);
+        } else {
+          setError("Game not found.");
+        }
+      })
+      .catch((err) => {
+        setError(err?.message || "Failed to load game details.");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [id]);
+
+  return { game, loading, error };
+}

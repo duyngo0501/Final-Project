@@ -1,19 +1,21 @@
 import uuid
 from collections.abc import Generator
 
+# Third-party imports
 import pytest
 from faker import Faker
 from fastapi.testclient import TestClient
 from gotrue import User
 from sqlmodel import Session, delete
+from supabase import Client, create_client
 
+# First-party imports
 from app import crud
 from app.core.config import settings
 from app.core.db import engine, init_db
 from app.main import app
 from app.models.item import Item, ItemCreate
 from app.schemas.auth import Token
-from supabase import Client, create_client
 
 
 @pytest.fixture(scope="module")

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Form, Input, Button, Select, Row, Col } from "antd";
 
 const { Option } = Select;
@@ -22,9 +22,15 @@ export interface ShippingAddressValues {
 interface ShippingAddressFormProps {
   initialValues?: Partial<ShippingAddressValues>;
   onSubmit: (values: ShippingAddressValues) => void;
-  // We might need a loading state prop later if submission involves async call
-  // isLoading?: boolean;
+  submitButtonText?: string;
 }
+
+// Basic ZIP code patterns (adjust as needed for specific countries)
+const zipPatterns: { [key: string]: RegExp } = {
+  US: /^\d{5}(-\d{4})?$/,
+  CA: /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/,
+  // Add more country patterns here
+};
 
 /**
  * @description A reusable form component for collecting shipping address information.
@@ -34,8 +40,15 @@ interface ShippingAddressFormProps {
 const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
   initialValues = {},
   onSubmit,
+  submitButtonText = "Save Address",
 }) => {
   const [form] = Form.useForm();
+  const selectedCountry = Form.useWatch("country", form);
+
+  // Reset fields when initialValues change (e.g., when editing a different address)
+  useEffect(() => {
+    form.resetFields();
+  }, [initialValues, form]);
 
   /**
    * @description Handles form submission after validation.
@@ -46,12 +59,17 @@ const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
     onSubmit(values);
   };
 
+  const onFinishFailed = (errorInfo: any) => {
+    console.log("Address Form Failed:", errorInfo);
+  };
+
   return (
     <Form
       form={form}
       layout="vertical"
       name="shipping_address"
       onFinish={onFinish}
+      onFinishFailed={onFinishFailed}
       initialValues={initialValues}
       requiredMark="optional" // Mark optional fields instead of required
     >
@@ -118,7 +136,16 @@ const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
                 required: true,
                 message: "Please enter your ZIP or postal code",
               },
+              {
+                pattern:
+                  selectedCountry && zipPatterns[selectedCountry]
+                    ? zipPatterns[selectedCountry]
+                    : /^.+$/,
+                message:
+                  "Please enter a valid postal code for the selected country",
+              },
             ]}
+            dependencies={["country"]}
           >
             <Input placeholder="Enter ZIP or postal code" />
           </Form.Item>
@@ -141,14 +168,11 @@ const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
         </Col>
       </Row>
 
-      {/* The submit button is typically part of the parent component (CheckoutPage) */}
-      {/* 
-         <Form.Item>
-           <Button type="primary" htmlType="submit">
-             Save Address
-           </Button>
-         </Form.Item>
-       */}
+      <Form.Item>
+        <Button type="primary" htmlType="submit">
+          {submitButtonText}
+        </Button>
+      </Form.Item>
     </Form>
   );
 };
