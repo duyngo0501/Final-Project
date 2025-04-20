@@ -12,8 +12,8 @@ from app.api.main import api_router
 from app.core.config import Settings
 from app.core.middleware import TracebackMiddleware
 from .utils import custom_generate_unique_id
-from app.api.routes import ( # noqa F401 
-    items, utils, health, carts, promotions 
+from app.api.routes import (
+    items, utils, carts, promotions # Remove 'carts' from here
 )
 from app.api.routes import products # Add products router import
 
@@ -60,7 +60,7 @@ if settings.all_cors_origins:
 app.include_router(health.router, prefix="/health", tags=["Health"])
 app.include_router(utils.router, prefix="/utils", tags=["Utils"])
 app.include_router(items.router, prefix="/items", tags=["Items"])
-app.include_router(carts.router, prefix="/carts", tags=["Carts"])
+# app.include_router(carts.router, prefix="/carts", tags=["Carts"]) # Comment out/remove this line
 app.include_router(promotions.router, prefix="/promotions", tags=["Promotions"])
 app.include_router(products.router, prefix="/products", tags=["Products"]) # Include the new router
 

@@ -1,22 +1,42 @@
-import uuid
+import enum
 from datetime import datetime
 from typing import Optional
+# Use SQLModel imports
+from sqlmodel import Field, SQLModel, Enum as SQLModelEnum 
 
-from sqlmodel import Field, SQLModel
+# Import the correct base class
+from app.models.base import InDBBase 
 
+class DiscountType(str, enum.Enum):
+    PERCENTAGE = "percentage"
+    FIXED = "fixed"
 
-class Promotion(SQLModel, table=True):
-    """Database model for promotions."""
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+# Inherit from InDBBase and use SQLModel syntax
+class Promotion(InDBBase, table=True):
+    __tablename__ = "promotions"
+
+    # id is inherited from InDBBase
     code: str = Field(max_length=100, unique=True, index=True, nullable=False)
     description: Optional[str] = Field(default=None, max_length=255)
-    discount_percentage: float = Field(nullable=False)
-    start_date: Optional[datetime] = Field(default=None, index=True)
-    end_date: Optional[datetime] = Field(default=None, index=True)
-    is_active: bool = Field(default=True, nullable=False, index=True)
-
-    # Automatic timestamps
+    
+    discount_type: DiscountType = Field(
+        sa_column=SQLModelEnum(DiscountType, nullable=False),
+        default=DiscountType.PERCENTAGE
+    )
+    discount_value: float = Field(nullable=False)
+    
+    start_date: Optional[datetime] = Field(default=None)
+    end_date: Optional[datetime] = Field(default=None)
+    
+    is_active: bool = Field(default=True, nullable=False)
+    
+    # Optional: Add usage limits if needed
+    # max_uses: int = Column(Integer, nullable=True)
+    # current_uses: int = Column(Integer, default=0, nullable=False)
+    
     created_at: datetime = Field(default_factory=datetime.utcnow, nullable=False)
-    updated_at: datetime = Field(
+    updated_at: Optional[datetime] = Field(
         default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow}
-    ) 
+    )
+
+    # No __repr__ needed typically with SQLModel, Pydantic handles representation 

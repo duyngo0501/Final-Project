@@ -1,267 +1,328 @@
-import { createContext, useContextSelector } from "use-context-selector";
-import { useReducer, useEffect, ReactNode, useCallback, Reducer } from "react";
+import React, { createContext, ReactNode, useCallback, useMemo } from "react";
 import { produce } from "immer";
-import {
-  getCart,
-  addToCart as addToCartApi,
-  updateCartItem,
-  removeFromCart as removeFromCartApi,
-} from "@/services/cartService";
+import { useContextSelector } from "use-context-selector";
+// Temporarily import cartAPI separately to test export issue
+// import { Cart, CartItem, cartAPI } from "@/services/api";
+import cartAPI from "@/services/api";
+// Import types separately - needed for interface definitions
+import { Cart, CartItem } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
+import useSWR, { mutate } from "swr";
+import { Game } from "@/types/game";
 
-// --- Type Definitions ---
-
-// Define the structure of a single item in the cart
-// Export the interface
-export interface CartItem {
-  id: string | number;
-  gameId: string | number; // Or specific game object type
-  quantity: number;
-  price: number; // Price per item
-  // Add other item details like name, image, etc.
-  [key: string]: any; // Allow other properties for now
-}
-
-// Define the structure of the Cart object
-// Export the interface
-export interface Cart {
-  id: string | number;
-  items: CartItem[];
-  total_price: number;
-  // Add other cart properties like userId, createdAt, etc.
-  [key: string]: any; // Allow other properties for now
-}
-
-// Define the shape of the cart state
+// Local state ONLY for mutations, data comes from SWR
 interface CartState {
-  cart: Cart | null;
-  loading: boolean;
-  error: string | null;
-  totalItems: number; // Derived state
+  isMutating: boolean;
+  mutationError: string | null;
 }
 
-// Define the possible actions for the cart reducer
-type CartAction =
-  | { type: "CART_FETCH_START" }
-  | { type: "CART_FETCH_SUCCESS"; payload: Cart | null }
-  | { type: "CART_FETCH_FAILURE"; payload: string }
-  | { type: "CART_UPDATE_START" } // Used for add, remove, update
-  | { type: "CART_UPDATE_SUCCESS"; payload: Cart }
-  | { type: "CART_UPDATE_FAILURE"; payload: string }
-  | { type: "CART_CLEAR" } // Action to clear cart on logout
-  | { type: "CLEAR_ERROR" };
-
-// Initial state for the cart
-const initialState: CartState = {
-  cart: null,
-  loading: false, // Start as false, loading triggered by auth change or fetch
-  error: null,
-  totalItems: 0,
-};
-
-// Helper function to calculate total items
-const calculateTotalItems = (cart: Cart | null): number => {
-  return cart?.items?.reduce((total, item) => total + item.quantity, 0) || 0;
-};
-
-// Reducer function for cart state using Immer
-const cartReducer: Reducer<CartState, CartAction> = produce(
-  (draft: CartState, action: CartAction) => {
-    switch (action.type) {
-      case "CART_FETCH_START":
-      case "CART_UPDATE_START":
-        draft.loading = true;
-        draft.error = null;
-        break;
-      case "CART_FETCH_SUCCESS":
-      case "CART_UPDATE_SUCCESS":
-        draft.cart = action.payload;
-        draft.totalItems = calculateTotalItems(action.payload);
-        draft.loading = false;
-        draft.error = null;
-        break;
-      case "CART_FETCH_FAILURE":
-      case "CART_UPDATE_FAILURE":
-        draft.loading = false;
-        draft.error = action.payload;
-        break;
-      case "CART_CLEAR":
-        draft.cart = null;
-        draft.totalItems = 0;
-        draft.loading = false;
-        draft.error = null;
-        break;
-      case "CLEAR_ERROR":
-        draft.error = null;
-        break;
-      default:
-        break;
-    }
-  }
-);
-
-// --- Context Setup ---
-
-// Define the context value shape
+// Define the context value shapewa
 interface CartContextValue extends CartState {
-  addToCart: (gameId: string, quantity?: number) => Promise<Cart | undefined>;
-  removeFromCart: (gameId: string) => Promise<Cart | undefined>;
-  updateQuantity: (
-    gameId: string,
-    quantity: number
-  ) => Promise<Cart | undefined>;
-  refreshCart: () => Promise<void>;
-  clearCartError: () => void;
+  cart: Cart | null | undefined; // Cart data from SWR
+  isLoading: boolean; // Combined Loading/Validating state from SWR
+  error: any; // Error state from SWR
+  totalItems: number; // Derived from SWR cart data
+  // Actions
+  addItem: (game: Game, quantity?: number) => Promise<void>;
+  removeItem: (gameId: number) => Promise<void>;
+  updateQuantity: (gameId: number, quantity: number) => Promise<void>;
+  clearCart: () => Promise<void>;
 }
 
-// Create the context using use-context-selector
-const CartContext = createContext<CartContextValue>({
-  ...initialState,
-  addToCart: async () => Promise.reject(new Error("CartProvider not found")),
-  removeFromCart: async () =>
-    Promise.reject(new Error("CartProvider not found")),
-  updateQuantity: async () =>
-    Promise.reject(new Error("CartProvider not found")),
-  refreshCart: async () => {
-    throw new Error("CartProvider not found");
-  },
-  clearCartError: () => {
-    throw new Error("CartProvider not found");
-  },
-});
+// Local state initial value
+const initialState: CartState = {
+  isMutating: false,
+  mutationError: null,
+};
 
-// --- Provider Component ---
+// Create Context with undefined default, provider will supply value
+const CartContext = createContext<CartContextValue | undefined>(undefined);
 
+// Create Provider Component
 interface CartProviderProps {
   children: ReactNode;
 }
 
+const CART_SWR_KEY = "/api/cart";
+
 /**
- * Provides cart state and actions to the application.
- * Manages fetching, adding, removing, and updating cart items.
- * @param {CartProviderProps} props The component props.
+ * Provides cart state and actions, interacting with the (mock) cart API.
+ * Uses SWR for data fetching and state management.
+ * @param {CartProviderProps} props Component props.
  * @returns {JSX.Element} The provider component.
  */
-export const CartProvider = ({ children }: CartProviderProps): JSX.Element => {
-  const [state, dispatch] = useReducer<Reducer<CartState, CartAction>>(
-    cartReducer,
-    initialState
-  );
+export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
+  const [mutationState, setMutationState] = React.useState(initialState);
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
 
-  // Fetch cart logic
-  const fetchCart = useCallback(async () => {
-    if (!isAuthenticated) return;
-    dispatch({ type: "CART_FETCH_START" });
-    try {
-      // FIXME: Use the actual type returned by getCart if known, otherwise Cart | null is a guess
-      const data: Cart | null = await getCart();
-      dispatch({ type: "CART_FETCH_SUCCESS", payload: data });
-    } catch (err: any) {
-      const message = err.message || "Failed to fetch cart";
-      console.error("Fetch cart error:", err);
-      dispatch({ type: "CART_FETCH_FAILURE", payload: message });
-    }
-  }, [isAuthenticated]);
-
-  // Effect to fetch cart when auth status changes or on mount if authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchCart();
-    } else {
-      // Clear cart when user logs out
-      dispatch({ type: "CART_CLEAR" });
-    }
-  }, [isAuthenticated, fetchCart]);
-
-  // --- Cart Action Functions ---
-
-  const addToCart = useCallback(
-    async (gameId: string, quantity: number = 1): Promise<Cart | undefined> => {
-      dispatch({ type: "CART_UPDATE_START" });
-      try {
-        // FIXME: Use the actual type returned by addToCartApi
-        const updatedCart: Cart = await addToCartApi(gameId, quantity);
-        dispatch({ type: "CART_UPDATE_SUCCESS", payload: updatedCart });
-        return updatedCart;
-      } catch (err: any) {
-        const message = err.message || "Failed to add item to cart";
-        console.error("Add to cart error:", err);
-        dispatch({ type: "CART_UPDATE_FAILURE", payload: message });
-        // Don't re-throw here, let components check the error state if needed
-      }
+  const {
+    data: cartData,
+    error,
+    isLoading,
+    isValidating,
+  } = useSWR<Cart | null>(
+    isAuthenticated ? CART_SWR_KEY : null,
+    async (key) => {
+      const res = await cartAPI.getCart();
+      return res.data;
     },
-    []
+    {
+      revalidateOnFocus: true,
+      shouldRetryOnError: true,
+    }
   );
 
-  const removeFromCart = useCallback(
-    async (gameId: string): Promise<Cart | undefined> => {
-      dispatch({ type: "CART_UPDATE_START" });
+  const combinedLoading = isLoading || isValidating;
+
+  const totalItems = useMemo(() => {
+    return (
+      cartData?.items?.reduce(
+        (sum, item: CartItem) => sum + item.quantity,
+        0
+      ) || 0
+    );
+  }, [cartData]);
+
+  // --- Mutation Functions --- (Optimistic UI updates)
+
+  const addItem = useCallback(
+    async (game: Game, quantity: number = 1) => {
+      if (!isAuthenticated) return;
+
+      setMutationState({ isMutating: true, mutationError: null });
+
+      const optimisticUpdate = (
+        currentCart: Cart | null | undefined
+      ): Cart | null => {
+        if (!currentCart) {
+          // If cart doesn't exist yet, create a new one optimistically
+          return {
+            id: "temp-cart",
+            userId: "temp-user",
+            items: [{ game, quantity }],
+          };
+        }
+        // Use Immer produce on the existing cart data
+        return produce(currentCart, (draft: Cart) => {
+          const existingItemIndex = draft.items.findIndex(
+            (item) => item.game.id === game.id
+          );
+          if (existingItemIndex > -1) {
+            draft.items[existingItemIndex].quantity += quantity;
+          } else {
+            draft.items.push({ game, quantity });
+          }
+          // Optimistically update total price if needed (example)
+          // draft.totalPrice = draft.items.reduce(...);
+        });
+      };
+
       try {
-        // FIXME: Use the actual type returned by removeFromCartApi
-        const updatedCart: Cart = await removeFromCartApi(gameId);
-        dispatch({ type: "CART_UPDATE_SUCCESS", payload: updatedCart });
-        return updatedCart;
+        await mutate(CART_SWR_KEY, optimisticUpdate(cartData), {
+          optimisticData: optimisticUpdate(cartData),
+          revalidate: false,
+        });
+        const response = await cartAPI.addItem(game.id, quantity);
+        // No need to manually mutate after API call if SWR key remains the same
+        // SWR will revalidate automatically or you can trigger manually if needed
+        // await mutate(CART_SWR_KEY); // Or use response.data if needed
+        setMutationState({ isMutating: false, mutationError: null });
       } catch (err: any) {
-        const message = err.message || "Failed to remove item from cart";
-        console.error("Remove from cart error:", err);
-        dispatch({ type: "CART_UPDATE_FAILURE", payload: message });
+        console.error("Add item error:", err);
+        const message = err.response?.data?.error || "Failed to add item";
+        setMutationState({ isMutating: false, mutationError: message });
+        // Revert optimistic update by revalidating
+        await mutate(CART_SWR_KEY); // Re-fetch from API to revert
       }
     },
-    []
+    [isAuthenticated, cartData]
+  );
+
+  const removeItem = useCallback(
+    async (gameId: number) => {
+      if (!isAuthenticated || !cartData) return; // Need cart data to remove from
+
+      setMutationState({ isMutating: true, mutationError: null });
+
+      const optimisticUpdate = produce(cartData, (draft: Cart | null) => {
+        if (!draft) return null; // If no cart, nothing to remove
+        const itemIndexToRemove = draft.items.findIndex(
+          (item) => item.game.id === gameId
+        );
+        if (itemIndexToRemove > -1) {
+          draft.items.splice(itemIndexToRemove, 1);
+        }
+      });
+
+      try {
+        await mutate(CART_SWR_KEY, optimisticUpdate, {
+          optimisticData: optimisticUpdate,
+          revalidate: false,
+        });
+        const response = await cartAPI.removeItem(gameId);
+        // await mutate(CART_SWR_KEY); // Trigger revalidation if needed
+        setMutationState({ isMutating: false, mutationError: null });
+      } catch (err: any) {
+        console.error("Remove item error:", err);
+        const message = err.response?.data?.error || "Failed to remove item";
+        setMutationState({ isMutating: false, mutationError: message });
+        await mutate(CART_SWR_KEY);
+      }
+    },
+    [isAuthenticated, cartData]
   );
 
   const updateQuantity = useCallback(
-    async (gameId: string, quantity: number): Promise<Cart | undefined> => {
+    async (gameId: number, quantity: number) => {
+      if (!isAuthenticated || !cartData) return;
       if (quantity <= 0) {
-        return removeFromCart(gameId); // Delegate to remove if quantity is zero or less
+        await removeItem(gameId);
+        return;
       }
-      dispatch({ type: "CART_UPDATE_START" });
+
+      setMutationState({ isMutating: true, mutationError: null });
+
+      const optimisticUpdate = produce(cartData, (draft: Cart | null) => {
+        if (!draft) return null;
+        const itemIndexToUpdate = draft.items.findIndex(
+          (item) => item.game.id === gameId
+        );
+        if (itemIndexToUpdate > -1) {
+          draft.items[itemIndexToUpdate].quantity = quantity;
+        }
+      });
+
       try {
-        // FIXME: Use the actual type returned by updateCartItem
-        const updatedCart: Cart = await updateCartItem(gameId, quantity);
-        dispatch({ type: "CART_UPDATE_SUCCESS", payload: updatedCart });
-        return updatedCart;
+        await mutate(CART_SWR_KEY, optimisticUpdate, {
+          optimisticData: optimisticUpdate,
+          revalidate: false,
+        });
+        const response = await cartAPI.updateItemQuantity(gameId, quantity);
+        // await mutate(CART_SWR_KEY);
+        setMutationState({ isMutating: false, mutationError: null });
       } catch (err: any) {
-        const message = err.message || "Failed to update quantity";
         console.error("Update quantity error:", err);
-        dispatch({ type: "CART_UPDATE_FAILURE", payload: message });
+        const message =
+          err.response?.data?.error || "Failed to update quantity";
+        setMutationState({ isMutating: false, mutationError: message });
+        await mutate(CART_SWR_KEY);
       }
     },
-    [removeFromCart]
-  ); // Add removeFromCart as dependency
+    [isAuthenticated, cartData, removeItem]
+  );
 
-  const clearCartError = useCallback(() => {
-    dispatch({ type: "CLEAR_ERROR" });
-  }, []);
+  const clearCart = useCallback(async () => {
+    if (!isAuthenticated || !cartData) return;
 
-  // Assemble context value
-  const value: CartContextValue = {
-    ...state,
-    // Provide actions
-    addToCart,
-    removeFromCart,
-    updateQuantity,
-    refreshCart: fetchCart, // Expose fetchCart as refreshCart
-    clearCartError,
-    // Note: totalPrice is now directly available in state.cart.total_price
-  };
+    setMutationState({ isMutating: true, mutationError: null });
 
+    const optimisticUpdate = produce(cartData, (draft: Cart | null) => {
+      if (!draft) return null;
+      draft.items = [];
+      draft.totalPrice = 0; // Reset total price optimistically if used
+    });
+
+    try {
+      await mutate(CART_SWR_KEY, optimisticUpdate, {
+        optimisticData: optimisticUpdate,
+        revalidate: false,
+      });
+      const response = await cartAPI.clearCart();
+      // await mutate(CART_SWR_KEY);
+      setMutationState({ isMutating: false, mutationError: null });
+    } catch (err: any) {
+      console.error("Clear cart error:", err);
+      const message = err.response?.data?.error || "Failed to clear cart";
+      setMutationState({ isMutating: false, mutationError: message });
+      await mutate(CART_SWR_KEY);
+    }
+  }, [isAuthenticated, cartData]);
+
+  // Assemble the context value - THIS MUST MATCH CartContextValue
+  const value: CartContextValue = useMemo(
+    () => ({
+      cart: cartData,
+      isLoading: combinedLoading,
+      error,
+      totalItems,
+      ...mutationState,
+      // Actions
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+    }),
+    [
+      cartData,
+      combinedLoading,
+      error,
+      totalItems,
+      mutationState,
+      addItem,
+      removeItem,
+      updateQuantity,
+      clearCart,
+    ]
+  );
+
+  // Provide the calculated value
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
 
-// --- Hook and Selectors ---
-
 /**
  * Hook to access the Cart context.
+ * Throws error if used outside of CartProvider.
  * Uses useContextSelector for performance optimization.
  * @template T The type of the selected state slice.
  * @param {(state: CartContextValue) => T} selector Function to select a slice of the context state.
  * @returns {T} The selected state slice.
- * @example
- * const cartItems = useCart(state => state.cart?.items ?? []);
- * const { addToCart } = useCart(state => ({ addToCart: state.addToCart }));
  */
 export const useCart = <T,>(selector: (state: CartContextValue) => T): T => {
-  return useContextSelector(CartContext, selector);
+  // Context type here should be CartContextValue | undefined
+  const context = useContextSelector(CartContext, (context) => {
+    // Check if context is undefined (meaning not within provider)
+    if (context === undefined) {
+      throw new Error("useCart must be used within a CartProvider");
+    }
+    // If context exists, apply the selector
+    return selector(context);
+  });
+  // The selector is applied inside, so the result T is returned
+  return context;
+};
+
+/**
+ * Hook to get only the total number of items in the cart.
+ */
+export const useCartTotalItems = (): number => {
+  // Select totalItems from the CartContextValue
+  return useCart((state) => state.totalItems);
+};
+
+/**
+ * Hook to get only the array of items in the cart.
+ */
+export const useCartItems = (): CartItem[] => {
+  // Select items from the cart property within CartContextValue
+  return useCart((state) => state.cart?.items || []);
+};
+
+/**
+ * Hook to get the cart loading state from SWR.
+ */
+export const useCartIsLoading = (): boolean => {
+  return useCart((state) => state.isLoading);
+};
+
+/**
+ * Hook to get the cart mutation state.
+ */
+export const useCartMutationState = (): {
+  isMutating: boolean;
+  mutationError: string | null;
+} => {
+  return useCart((state) => ({
+    isMutating: state.isMutating,
+    mutationError: state.mutationError,
+  }));
 };

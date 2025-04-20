@@ -1,206 +1,161 @@
-import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { gamesAPI } from "@/services/api";
+import React, { useState } from "react";
 import {
+  Layout,
+  Row,
+  Col,
   Spin,
   Alert,
+  Typography,
   Pagination,
   Card,
-  List,
-  Typography,
-  Button,
-  Space,
-  Image,
+  Select,
+  Input,
   Empty,
+  Space,
 } from "antd";
+import { Game } from "@/types/game";
+import { useGames } from "@/hooks/useGames"; // Using the mock hook
+// We can reuse the GameGrid component from the homepage
+import GameGrid from "@/components/home/GameGrid"; // Adjust path if needed
+import { useCart } from "@/contexts/CartContext"; // To pass addItem to GameGrid
+import GameFilters from "@/components/games/GameFilters"; // Import the new component
 
-// FIXME: Replace with actual Game type definition, ideally imported
-interface Game {
-  id: string | number;
-  title: string;
-  description: string;
-  price: number;
-  image_url?: string;
-  stock?: number; // Optional stock
-  [key: string]: any;
-}
-
-// Assuming API response structure
-interface GamesApiResponse {
-  data: {
-    games: Game[];
-    pages: number; // Total number of pages
-    // Potentially other fields like totalGames
-  };
-  // Include other potential top-level response fields if necessary
-}
-
-const { Title, Paragraph, Text } = Typography;
-const { Meta } = Card;
-
-const PAGE_SIZE = 12; // Items per page
+const { Content } = Layout;
+const { Title, Text } = Typography;
+const { Option } = Select;
+const { Search } = Input;
 
 /**
- * GamesPage component displaying a paginated list of games.
- * Uses Ant Design components for layout, loading, error, and pagination.
- * @returns {JSX.Element} The rendered games page.
+ * @description Page for browsing, filtering, sorting, and paginating all games.
+ * @returns {React.FC} The GamesPage component.
  */
-const GamesPage = (): JSX.Element => {
-  const [games, setGames] = useState<Game[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+const GamesPage: React.FC = () => {
+  // State for filters, sorting, pagination, search
+  const [category, setCategory] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [sortBy, setSortBy] = useState<string>("title_asc"); // e.g., price_asc, price_desc, title_asc
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  // const [totalGames, setTotalGames] = useState<number>(0); // Optional total count
+  const [pageSize, setPageSize] = useState<number>(12); // Number of games per page
 
-  const navigate = useNavigate();
+  // Fetch games using the updated SWR hook with all parameters
+  const {
+    games,
+    totalGames, // Use the total count returned by the hook
+    isLoading,
+    isError,
+  } = useGames({
+    category,
+    searchTerm,
+    sortBy,
+    currentPage,
+    pageSize,
+  });
 
-  useEffect(() => {
-    const fetchGames = async () => {
-      setError(null);
-      setLoading(true);
-      try {
-        // Explicitly type the expected response
-        const response: GamesApiResponse = await gamesAPI.getAllGames(
-          currentPage,
-          PAGE_SIZE
-        );
-        setGames(response.data.games || []);
-        setTotalPages(response.data.pages || 1);
-        // setTotalGames(response.data.totalGames || 0); // If API provides total count
-      } catch (err: any) {
-        console.error("Error fetching games:", err);
-        setError(
-          err.message || "Failed to load games. Please try again later."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Get cart function using selector
+  const addToCart = useCart((state) => state.addItem);
 
-    fetchGames();
-  }, [currentPage]); // Refetch when currentPage changes
-
-  /**
-   * Handles page changes from the Pagination component.
-   * @param {number} page The new page number.
-   * @param {number} [pageSize] The page size (optional).
-   */
-  const handlePageChange = (page: number, pageSize?: number) => {
-    setCurrentPage(page);
-    window.scrollTo(0, 0); // Scroll to top on page change
+  // Placeholder handlers - will be connected later
+  const handleCategoryChange = (value: string) => {
+    setCategory(value);
+    setCurrentPage(1); // Reset page when category changes
+    // console.log('Category selected:', value);
   };
 
-  // Render loading state (only show full page spinner on initial load)
-  if (loading && currentPage === 1) {
-    return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
-        <Spin size="large" />
-      </div>
-    );
-  }
+  const handleSortChange = (value: string) => {
+    setSortBy(value);
+    // console.log('Sort by:', value);
+    // No need to reset page for sorting
+  };
 
-  // Render error state
-  if (error) {
-    return (
-      <Alert
-        message="Error Loading Games"
-        description={error}
-        type="error"
-        showIcon
-        className="my-8"
-        action={
-          <Button onClick={() => setCurrentPage(1)} type="primary">
-            Try Again
-          </Button>
-        }
-      />
-    );
-  }
+  const handleSearch = (value: string) => {
+    setSearchTerm(value.trim());
+    setCurrentPage(1); // Reset page on new search
+    // console.log('Search term:', value.trim());
+  };
+
+  const handlePageChange = (page: number, size?: number) => {
+    setCurrentPage(page);
+    if (size) setPageSize(size);
+    // console.log('Page changed to:', page, 'Size:', size);
+  };
+
+  // Data is now directly from the hook, including totalGames
+  // const displayedGames = games || [];
+  // const totalGames = games?.length || 0; // Removed: using totalGames from hook
 
   return (
-    <div>
-      <Title level={2} className="mb-8">
-        All Games
-      </Title>
+    <Layout>
+      <Content
+        style={{ padding: "20px 24px", maxWidth: 1200, margin: "0 auto" }}
+      >
+        <Title level={2} style={{ marginBottom: 24 }}>
+          Browse Games
+        </Title>
 
-      {/* Use List component with grid prop for responsive layout */}
-      <List
-        grid={{ gutter: 16, xs: 1, sm: 2, md: 3, lg: 3, xl: 4, xxl: 4 }} // Responsive grid
-        dataSource={games}
-        loading={loading}
-        renderItem={(game: Game) => (
-          <List.Item>
-            <Card
-              hoverable
-              style={{ width: "100%" }} // Ensure card takes full width of List grid item
-              cover={
-                <Image
-                  alt={game.title}
-                  src={
-                    game.image_url ||
-                    "https://via.placeholder.com/300x200?text=Game+Image"
-                  }
-                  preview={false} // Disable preview for card images
-                  style={{ height: 200, objectFit: "cover" }} // Fixed height
-                />
-              }
-              actions={[
-                <Button
-                  type="primary"
-                  onClick={() => navigate(`/games/${game.id}`)}
-                  key="view"
-                >
-                  View Details
-                </Button>,
-              ]}
-            >
-              <Meta
-                // Use Typography.Title level 5, truncate if too long
-                title={
-                  <Title
-                    level={5}
-                    className="!mb-1"
-                    ellipsis={{ tooltip: game.title }}
-                  >
-                    {game.title}
-                  </Title>
-                }
-                // Use Typography.Paragraph with ellipsis
-                description={
-                  <Paragraph
-                    type="secondary"
-                    ellipsis={{ rows: 2, expandable: false }}
-                  >
-                    {game.description}
-                  </Paragraph>
-                }
-              />
-              {/* Use Typography.Text for price */}
-              <div className="mt-4">
-                <Text strong className="text-lg">
-                  ${game.price.toFixed(2)}
-                </Text>
-              </div>
-            </Card>
-          </List.Item>
+        {/* Render the GameFilters component */}
+        <GameFilters
+          category={category}
+          sortBy={sortBy}
+          searchTerm={searchTerm}
+          onCategoryChange={handleCategoryChange}
+          onSortChange={handleSortChange}
+          onSearch={handleSearch}
+          // Pass isLoading if you want to disable controls:
+          // isLoading={isLoading}
+        />
+
+        {isLoading && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              minHeight: "300px",
+            }}
+          >
+            <Spin size="large" tip="Loading Games..." />
+          </div>
         )}
-        locale={{ emptyText: <Empty description="No games found." /> }}
-      />
 
-      {/* Pagination: Use currentPage state variable */}
-      {games.length > 0 && totalPages > 1 && (
-        <div className="mt-8 flex justify-center">
-          <Pagination
-            current={currentPage} // Use currentPage
-            total={totalPages * PAGE_SIZE}
-            pageSize={PAGE_SIZE}
-            onChange={handlePageChange}
-            showSizeChanger={false}
+        {isError && (
+          <Alert
+            message="Error Loading Games"
+            description={isError.message || "Could not load games."}
+            type="error"
+            showIcon
+            style={{ marginBottom: 24 }}
           />
-        </div>
-      )}
-    </div>
+        )}
+
+        {!isLoading && !isError && (
+          <>
+            {games && games.length > 0 ? (
+              <GameGrid games={games} onQuickBuy={addToCart} />
+            ) : searchTerm || category !== "all" ? (
+              <Empty
+                description="No games found matching your criteria."
+                style={{ padding: "50px 0" }}
+              />
+            ) : (
+              <div style={{ minHeight: "300px" }}></div>
+            )}
+
+            {totalGames && totalGames > pageSize && (
+              <Row justify="center" style={{ marginTop: 32 }}>
+                <Pagination
+                  current={currentPage}
+                  pageSize={pageSize}
+                  total={totalGames}
+                  onChange={handlePageChange}
+                  showSizeChanger
+                  pageSizeOptions={["12", "24", "36"]}
+                />
+              </Row>
+            )}
+          </>
+        )}
+      </Content>
+    </Layout>
   );
 };
 

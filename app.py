@@ -13,6 +13,9 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
 from pydantic import ValidationError
+# Add Supabase imports
+from supabase import create_client, Client
+from supabase.client import AuthUserAttributes
 
 load_dotenv()
 
@@ -28,6 +31,19 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', app.config['SECRET_KEY'])
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(hours=1)
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = timedelta(days=30)
+
+# Initialize Supabase Client
+try:
+    supabase_url: str = os.environ.get("SUPABASE_URL")
+    supabase_key: str = os.environ.get("SUPABASE_ANON_KEY") # Use Anon key for reset email
+    if not supabase_url or not supabase_key:
+        raise ValueError("SUPABASE_URL and SUPABASE_ANON_KEY must be set in environment variables.")
+    supabase: Client = create_client(supabase_url, supabase_key)
+    app.logger.info("Supabase client initialized successfully.")
+except Exception as e:
+    app.logger.error(f"Failed to initialize Supabase client: {e}")
+    # Depending on requirements, you might want to exit or handle this differently
+    supabase = None 
 
 # Initialize extensions
 db.init_app(app)
@@ -415,6 +431,104 @@ def remove_from_cart(game_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+# --- Add Forgot Password Endpoint --- 
+@app.route('/api/v1/auth/forgot-password', methods=['POST'])
+def forgot_password():
+    """Handles forgot password request using Supabase"""
+    if not supabase:
+        return jsonify({'error': 'Supabase client not initialized'}), 503 # Service Unavailable
+
+    try:
+        data = request.get_json()
+        email = data.get('email')
+
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+
+        # Define the redirect URL for the frontend reset page
+        # Ensure this URL is added to your Supabase project's allowed redirect URLs!
+        redirect_url = "http://localhost:5173/reset-password"
+
+        # Call Supabase to send the password reset email
+        supabase.auth.reset_password_email(
+            email,
+            options={"redirect_to": redirect_url}
+        )
+        
+        # For security, always return a generic success message 
+        # regardless of whether the email exists in Supabase.
+        return jsonify({'message': 'If an account exists for this email, a password reset link has been sent.'}), 200
+
+    except Exception as e:
+        # Log the actual error for debugging
+        app.logger.error(f"Supabase forgot password error: {e}") 
+        # Return a generic error to the client
+        return jsonify({'error': 'An error occurred while trying to send the reset email.'}), 500
+# --- End Forgot Password Endpoint ---
+
+# --- Add Reset Password Endpoint --- 
+@app.route('/api/v1/auth/reset-password', methods=['POST'])
+def reset_password():
+    """Handles setting a new password after user clicks reset link."""
+    if not supabase:
+        return jsonify({'error': 'Supabase client not initialized'}), 503
+
+    try:
+        # 1. Get the JWT from the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({'error': 'Authorization header missing or invalid'}), 401
+        jwt_token = auth_header.split(" ")[1]
+
+        # 2. Get the new password from the request body
+        data = request.get_json()
+        new_password = data.get('new_password')
+        if not new_password:
+            return jsonify({'error': 'New password is required'}), 400
+        
+        # Optional: Add password strength validation here if needed
+        if len(new_password) < 6:
+             return jsonify({'error': 'Password must be at least 6 characters long'}), 400
+
+        # 3. Validate the user token and update the password via Supabase
+        # We need to authenticate the client instance with the user's token 
+        # before we can update *their* password.
+        # get_user() validates the token and returns user info, but doesn't persistently set the session 
+        # on the Python client instance for the *next* call in the same way set_session would.
+        # However, update_user implicitly acts on the user identified by the token passed to it
+        # if the token is included in the client's headers internally, which get_user might facilitate,
+        # OR it might require admin privileges if not acting on a currently set session.
+        # Let's try the direct update first, assuming Supabase handles the context.
+        # If this fails with auth errors, we might need `set_session` first.
+
+        # Validate the token first (optional but good practice)
+        user_info = supabase.auth.get_user(jwt=jwt_token) # Throws if invalid/expired
+        app.logger.info(f"Attempting password update for user: {user_info.user.id}")
+
+        # Update the user's password 
+        # The supabase client needs to be implicitly aware of the user based on the valid jwt 
+        # for this call to update the correct user.
+        # If using anon key, this relies on Supabase backend logic associating the update 
+        # with the user identified by the token used implicitly or explicitly.        
+        update_response = supabase.auth.update_user(
+            AuthUserAttributes(password=new_password),
+            jwt=jwt_token # Pass the token explicitly to ensure context
+        )
+        
+        app.logger.info(f"Password update response: {update_response}")
+        
+        return jsonify({'message': 'Password reset successfully.'}), 200
+
+    except Exception as e:
+        # Log the actual error
+        app.logger.error(f"Supabase reset password error: {e}")
+        # Check for specific Supabase errors if possible
+        # Example: Check if error indicates expired/invalid token
+        if "Invalid JWT" in str(e) or "Token expired" in str(e):
+             return jsonify({'error': 'Invalid or expired password reset link.'}), 401
+        return jsonify({'error': 'An error occurred while resetting the password.'}), 500
+# --- End Reset Password Endpoint --- 
 
 if __name__ == '__main__':
     with app.app_context():

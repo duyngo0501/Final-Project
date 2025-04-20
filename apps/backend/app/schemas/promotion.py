@@ -1,17 +1,23 @@
 import uuid
 from datetime import datetime
 from typing import Optional
+import enum
 
 from pydantic import BaseModel, Field, validator
 
 
+# Use the same Enum as in the model
+class DiscountType(str, enum.Enum):
+    PERCENTAGE = "percentage"
+    FIXED = "fixed"
+
+
 class PromotionBase(BaseModel):
     """Shared base properties for a promotion."""
-    code: str = Field(..., description="Unique code for the promotion (e.g., 'SUMMER20')")
-    description: Optional[str] = Field(None, description="Optional description of the promotion")
-    discount_percentage: float = Field(
-        ..., gt=0, le=100, description="Discount percentage (e.g., 10.5 for 10.5%)"
-    )
+    code: str = Field(..., max_length=100, description="Unique promotion code (e.g., SUMMER20)")
+    description: Optional[str] = Field(None, max_length=255, description="Description of the promotion")
+    discount_type: DiscountType = Field(default=DiscountType.PERCENTAGE, description="Type of discount")
+    discount_value: float = Field(..., gt=0, description="Value of the discount (percentage or fixed amount)")
     start_date: Optional[datetime] = Field(None, description="When the promotion becomes active")
     end_date: Optional[datetime] = Field(None, description="When the promotion expires")
     is_active: bool = Field(True, description="Whether the promotion is currently active")
@@ -31,9 +37,10 @@ class PromotionCreate(PromotionBase):
 
 class PromotionUpdate(BaseModel):
     """Properties to receive via API on update (all optional)."""
-    code: Optional[str] = None
-    description: Optional[str] = None
-    discount_percentage: Optional[float] = Field(None, gt=0, le=100)
+    code: Optional[str] = Field(None, max_length=100)
+    description: Optional[str] = Field(None, max_length=255)
+    discount_type: Optional[DiscountType] = None
+    discount_value: Optional[float] = Field(None, gt=0)
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     is_active: Optional[bool] = None
@@ -57,3 +64,12 @@ class Promotion(PromotionBase):
 
     class Config:
         from_attributes = True # Allows creating from ORM models 
+
+
+class PromotionResponse(PromotionBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True # Enable reading data from ORM models 

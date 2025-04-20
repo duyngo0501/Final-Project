@@ -1,7 +1,7 @@
 import { createContext, useContextSelector } from "use-context-selector";
 import { useReducer, useEffect, ReactNode, useCallback, Reducer } from "react";
 import { produce } from "immer";
-import { authAPI } from "../services/api"; // Removed Credentials, UserData import
+import { authAPI } from "@/services/api"; // Removed Credentials, UserData import
 
 // FIXME: Replace with actual type definitions, ideally imported
 // Export the placeholder interface
