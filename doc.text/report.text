@@ -1,0 +1,138 @@
+# 📘 Undergraduate Project Report Structure
+
+> ⚠️ *Remember to write the report using the Greenwich template – font, size, cover page, etc.*
+
+---
+
+## 📄 Cover Page  
+*(Use Greenwich template)*
+
+---
+
+## 🙏 Acknowledgements  
+*(If any)*
+
+---
+
+## 📑 Table of Contents  
+*(To be generated after full report completion)*
+
+---
+
+## 🧩 Chapter 1: Introduction
+
+### 1.1 Introduction about the Project Subject  
+*(1–2 pages)*
+
+### 1.2 Project Objectives  
+*(1–2 pages)*
+
+### 1.3 Project Plan  
+*(1–2 pages)*
+
+### 1.4 Project Outcomes  
+*(1–2 pages)*
+
+### 1.5 Project Evaluation  
+*(Short evaluation only. Full evaluation in Chapter 7 – 1–2 pages)*
+
+---
+
+## 📚 Chapter 2: Literature Review
+
+### 2.1 Key Topic 1  
+*(e.g., What is Augmented Reality?)*
+
+### 2.2 Key Topic 2  
+*(e.g., The Use of AR)*
+
+### 2.3 Key Topic 3  
+*(e.g., What is inside AR?)*
+
+### 2.4 Key Topic 4  
+*(e.g., How an AR Application is Made)*
+
+### 2.5 Key Topic 5  
+*(e.g., How Google and Other Big Tech Companies Support AR)*
+
+### 2.6 Key Topic 6  
+*(More topics as needed)*
+
+---
+
+## 🛠️ Chapter 3: Technology and Tools
+
+### 3.1 Key Topic 1  
+*(e.g., Tool X)*
+
+### 3.2 Key Topic 2  
+*(e.g., Library Y)*
+
+### 3.3 More Topics  
+*(As required)*
+
+---
+
+## 📋 Chapter 4: Software Product Requirements
+
+### 4.1 Review/Overview of Similar Products  
+### 4.2 Use Case Diagrams / User Stories  
+### 4.3 Use Case Specifications / Activity Diagrams / Context Diagrams / Sequence Diagrams  
+### 4.4 ERD (Entity Relationship Diagram)  
+### 4.5 Sitemap  
+
+---
+
+## 🔁 Chapter 5: Review of Software Development Methodologies
+
+### 5.1 Waterfall  
+*(1–2 pages)*
+
+### 5.2 Spiral  
+*(1–2 pages)*
+
+### 5.3 RAD (Prototyping)  
+*(1–2 pages)*
+
+### 5.4 Agile  
+*(1–2 pages)*
+
+### 5.5 Your Selected Methodology and Justification  
+*(1–2 pages)*
+
+---
+
+## 💻 Chapter 6: Design and Implementation of Demo Product
+
+### 6.1 Product Analysis and Design  
+- GUI Design  
+- Analysis  
+- Basic and Detailed Design  
+
+### 6.2 Features with Screenshots  
+- Major screenshots (5–7)  
+- Short explanations  
+
+### 6.3 Product Implementation  
+- Major code snippets (5–7)  
+- Technical explanations  
+
+### 6.4 Evaluation of Your Product  
+*(Good/Bad – 1–2 pages)*
+
+---
+
+## ✅ Chapter 7: Conclusions
+
+### 7.1 What Have You Learned from This Project?  
+*(1–2 pages)*
+
+### 7.2 What is the Result of This Project?  
+*(1–2 pages)*
+
+### 7.3 Further Development of This Project  
+*(1–2 pages)*  
+- Future improvements  
+- Product fine-tuning  
+- Market deployment  
+- Related future research  
