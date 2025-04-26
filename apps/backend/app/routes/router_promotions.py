@@ -26,6 +26,7 @@ router = APIRouter()
     "/",
     response_model=PromotionResponse,
     status_code=status.HTTP_201_CREATED,
+    operation_id="PromotionController_createPromotion",
 )
 def create_promotion(
     promotion_in: PromotionCreateRow,
@@ -49,7 +50,11 @@ def create_promotion(
     return db_promotion
 
 
-@router.get("/", response_model=list[PromotionResponse])
+@router.get(
+    "/",
+    response_model=list[PromotionResponse],
+    operation_id="PromotionController_readPromotions",
+)
 def read_promotions(
     # SessionDep first (no default value)
     session: SessionDep,
@@ -68,7 +73,11 @@ def read_promotions(
     return promotions
 
 
-@router.get("/{promotion_id}", response_model=PromotionResponse)
+@router.get(
+    "/{promotion_id}",
+    response_model=PromotionResponse,
+    operation_id="PromotionController_readPromotion",
+)
 def read_promotion(
     promotion_id: uuid.UUID, session: SessionDep
 ):  # Use SessionDep and UUID
@@ -87,6 +96,7 @@ def read_promotion(
 @router.put(
     "/{promotion_id}",
     response_model=PromotionResponse,
+    operation_id="PromotionController_updatePromotion",
 )
 def update_promotion(
     promotion_id: uuid.UUID,
@@ -125,6 +135,7 @@ def update_promotion(
 @router.delete(
     "/{promotion_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="PromotionController_deletePromotion",
 )
 def delete_promotion(
     promotion_id: uuid.UUID,

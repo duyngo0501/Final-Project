@@ -23,7 +23,9 @@ from app.schemas.db_user import UserCreateSchema, UserReadSchema
 router = APIRouter()
 
 
-@router.post("/login", response_model=TokenResponseSchema)
+@router.post(
+    "/login", response_model=TokenResponseSchema, operation_id="AuthController_login"
+)
 async def login(
     super_client: SuperClient,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -86,7 +88,11 @@ async def login(
         )
 
 
-@router.post("/register", response_model=UserReadSchema)
+@router.post(
+    "/register",
+    response_model=UserReadSchema,
+    operation_id="AuthController_registerUser",
+)
 async def register_user(
     *,
     db: Session = Depends(get_db),  # Use get_db directly

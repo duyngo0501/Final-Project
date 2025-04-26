@@ -51,7 +51,10 @@ def format_currency(amount: float) -> str:
 
 
 @router.post(
-    "/", response_model=OrderResponseSchema, status_code=status.HTTP_201_CREATED
+    "/",
+    response_model=OrderResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="OrderController_createOrder",
 )
 async def create_order(
     order_in: OrderCreateSchema, session: SessionDep, current_user: CurrentUser
@@ -200,7 +203,11 @@ async def create_order(
     return new_order  # FastAPI will convert using OrderResponse schema
 
 
-@router.get("/", response_model=List[OrderResponseSchema])
+@router.get(
+    "/",
+    response_model=List[OrderResponseSchema],
+    operation_id="OrderController_getMyOrders",
+)
 async def get_my_orders(
     session: SessionDep,
     current_user: CurrentUser,

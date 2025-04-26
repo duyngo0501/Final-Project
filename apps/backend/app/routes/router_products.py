@@ -36,7 +36,11 @@ router = APIRouter()
 # DUMMY_PRODUCTS = [ ... ]
 
 
-@router.get("/", response_model=ProductListingResponse)
+@router.get(
+    "/",
+    response_model=ProductListingResponse,
+    operation_id="ProductController_listProducts",
+)
 def list_products(
     request: Request,
     session: SessionDep,
@@ -90,6 +94,7 @@ def list_products(
     "/",
     response_model=GamePublicSchema,
     status_code=status.HTTP_201_CREATED,
+    operation_id="ProductController_createGame",
 )
 def create_game_endpoint(
     *,
@@ -119,7 +124,11 @@ def create_game_endpoint(
     return new_game
 
 
-@router.delete("/{game_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{game_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="ProductController_deleteGame",
+)
 def delete_game_endpoint(
     *,
     session: SessionDep,

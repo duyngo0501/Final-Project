@@ -14,7 +14,9 @@ from app.schemas.db_cart import (
 router = APIRouter()
 
 
-@router.get("/", response_model=CartResponseSchema)
+@router.get(
+    "/", response_model=CartResponseSchema, operation_id="CartController_getCart"
+)
 async def read_cart(
     session: SessionDep, current_user: CurrentUser
 ) -> CartResponseSchema:
@@ -42,7 +44,10 @@ async def read_cart(
 
 
 @router.post(
-    "/items", response_model=CartItemResponseSchema, status_code=status.HTTP_201_CREATED
+    "/items",
+    response_model=CartItemResponseSchema,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="CartController_addItem",
 )
 async def add_item_to_cart(
     item_in: CartItemCreateSchema, session: SessionDep, current_user: CurrentUser
@@ -73,7 +78,11 @@ async def add_item_to_cart(
     return cart_item
 
 
-@router.put("/items/{game_id}", response_model=CartItemResponseSchema)
+@router.put(
+    "/items/{game_id}",
+    response_model=CartItemResponseSchema,
+    operation_id="CartController_updateItemQuantity",
+)
 async def update_cart_item_quantity(
     game_id: uuid.UUID,
     item_in: CartItemUpdateSchema,
@@ -109,7 +118,11 @@ async def update_cart_item_quantity(
     return updated_item
 
 
-@router.delete("/items/{game_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/items/{game_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="CartController_removeItem",
+)
 async def remove_item_from_cart(
     game_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
@@ -144,7 +157,11 @@ async def remove_item_from_cart(
     return None
 
 
-@router.delete("/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="CartController_clearCart",
+)
 async def clear_cart(session: SessionDep, current_user: CurrentUser) -> None:
     """Clear all items from the shopping cart.
 

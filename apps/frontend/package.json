@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "kubb generate && vite",
+    "dev": "sleep 5 && kubb generate && vite",
     "build": "kubb generate && vite build",
     "start": "npx http-server dist",
     "lint": "eslint .",

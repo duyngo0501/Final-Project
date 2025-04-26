@@ -2,20 +2,27 @@ version: "3.8"
 
 services:
   backend:
-    build: ./apps/backend
-    network_mode: host
+    build:
+      context: ./apps/backend # Path to the backend directory containing Dockerfile
+      dockerfile: Dockerfile
+    container_name: backend_service
     volumes:
-      # Mount source code for development (adjust if backend Dockerfile uses a different workdir)
+      # Mount the backend code for development (reflects changes without rebuild)
+      # Comment out or remove for production builds
       - ./apps/backend:/app
-    environment:
-      # Add any backend-specific environment variables here
-      - DATABASE_URL=your_database_connection_string
-      - SECRET_KEY=your_backend_secret_key
-      # HOST_PORT=5000 # Example, might be needed if backend needs to know its host port
+    env_file:
+      - ./apps/backend/.env # Load environment variables from this file
+    network_mode: host # Use host network
+    restart: unless-stopped
+    # If using --reload with uvicorn, ensure stdin_open and tty are true
+    # stdin_open: true
+    # tty: true
 
   frontend:
-    build: ./apps/frontend
-    network_mode: host
+    build:
+      context: ./apps/frontend # Assuming Dockerfile is in apps/frontend
+      dockerfile: Dockerfile # Assuming Dockerfile name
+    container_name: frontend_service
     volumes:
       # Mount source code for development (adjust if frontend Dockerfile uses a different workdir)
       - ./apps/frontend:/app
@@ -24,22 +31,7 @@ services:
     environment:
       # Example: Tell frontend where backend is (though localhost should work with host network)
       # If using Vite/React, VITE_API_URL might be the convention
-      - VITE_API_URL=http://localhost:5000/api # Adjust port if backend runs elsewhere
-    depends_on:
-      - backend
-# Add other services like databases if needed, potentially also on host network
-# or using a bridge network if preferred.
-# Example database (using bridge network):
-# database:
-#   image: postgres:15
-#   volumes:
-#     - postgres_data:/var/lib/postgresql/data
-#   environment:
-#     - POSTGRES_DB=myappdb
-#     - POSTGRES_USER=user
-#     - POSTGRES_PASSWORD=password
-#   networks:
-#     - default # Default bridge network
-
-# volumes:
-#   postgres_data:
+      # Point to backend service using its service name on the Docker network
+      - VITE_API_URL=http://localhost:8000/api/v1
+    network_mode: host # Use host network
+    restart: unless-stopped

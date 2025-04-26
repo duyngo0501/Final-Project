@@ -38,7 +38,7 @@ export type ResponseErrorConfig<TError = unknown> = {
 };
 
 export const axiosInstance = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: import.meta.env.VITE_API_URL,
 });
 
 // Will be used by kubb.config.ts

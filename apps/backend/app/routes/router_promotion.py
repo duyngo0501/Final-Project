@@ -15,6 +15,7 @@ router = APIRouter()
     response_model=Promotion,
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(AdminUser)],  # Protect endpoint
+    operation_id="PromotionController_createPromotion_singular",
 )
 async def create_promotion(
     promotion_in: PromotionCreateRow, session: SessionDep
@@ -45,7 +46,12 @@ async def create_promotion(
     return promotion
 
 
-@router.get("/", response_model=Sequence[Promotion], dependencies=[Depends(AdminUser)])
+@router.get(
+    "/",
+    response_model=Sequence[Promotion],
+    dependencies=[Depends(AdminUser)],
+    operation_id="PromotionController_readPromotions_singular",
+)
 async def read_promotions(
     session: SessionDep,
     skip: int = Query(0, ge=0),
@@ -67,7 +73,12 @@ async def read_promotions(
     return promotions
 
 
-@router.get("/{id}", response_model=Promotion, dependencies=[Depends(AdminUser)])
+@router.get(
+    "/{id}",
+    response_model=Promotion,
+    dependencies=[Depends(AdminUser)],
+    operation_id="PromotionController_readPromotion_singular",
+)
 async def read_promotion(id: str, session: SessionDep) -> Promotion:
     """Admin: Get a specific promotion by its ID.
 
@@ -91,7 +102,12 @@ async def read_promotion(id: str, session: SessionDep) -> Promotion:
     return promotion
 
 
-@router.put("/{id}", response_model=Promotion, dependencies=[Depends(AdminUser)])
+@router.put(
+    "/{id}",
+    response_model=Promotion,
+    dependencies=[Depends(AdminUser)],
+    operation_id="PromotionController_updatePromotion_singular",
+)
 async def update_promotion(
     id: str, promotion_in: PromotionUpdateRow, session: SessionDep
 ) -> Promotion:
@@ -129,7 +145,10 @@ async def update_promotion(
 
 
 @router.delete(
-    "/{id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(AdminUser)]
+    "/{id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(AdminUser)],
+    operation_id="PromotionController_deletePromotion_singular",
 )
 async def delete_promotion(id: str, session: SessionDep) -> None:
     """Admin: Delete a promotion.

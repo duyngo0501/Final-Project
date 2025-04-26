@@ -20,7 +20,7 @@ import {
 } from "antd";
 import { DeleteOutlined, ShoppingCartOutlined } from "@ant-design/icons";
 import { useCart } from "@/contexts/CartContext";
-import { CartItem } from "@/services/api"; // Assuming type is here
+import { CartItemResponseSchema } from "@/gen/types";
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -42,20 +42,21 @@ const CartPage: React.FC = () => {
     clearCart,
   } = useCart();
 
-  // Calculate total price locally (consider moving to context if complex)
+  // Calculate total price locally - Requires fetching game details
+  // TODO: Implement fetching/accessing game details to calculate price
   const totalPrice = React.useMemo(() => {
-    return (
-      cart?.items.reduce((sum, item) => {
-        const price = item.game.discountedPrice ?? item.game.price;
-        return sum + price * item.quantity;
-      }, 0) ?? 0
-    );
+    // Cannot calculate without price info from game details.
+    return 0; // Returning 0 for now
   }, [cart]);
 
-  const handleQuantityChange = async (item: CartItem, quantity: number) => {
+  const handleQuantityChange = async (
+    item: CartItemResponseSchema,
+    quantity: number
+  ) => {
     if (!quantity || quantity < 1) return; // Prevent invalid quantities
     try {
-      await updateQuantity(item.game.id, quantity);
+      // Context action expects game_id (number)
+      await updateQuantity(Number(item.game_id), quantity);
       message.success("Quantity updated");
     } catch (err) {
       message.error("Failed to update quantity");
@@ -63,10 +64,12 @@ const CartPage: React.FC = () => {
     }
   };
 
-  const handleRemoveItem = async (item: CartItem) => {
+  const handleRemoveItem = async (item: CartItemResponseSchema) => {
     try {
-      await removeItem(item.game.id);
-      message.success(`${item.game.title} removed from cart`);
+      // Context action expects game_id (number)
+      await removeItem(Number(item.game_id));
+      // Need game title for message - fetch it or show generic message
+      message.success(`Item removed from cart`); // Generic message
     } catch (err) {
       message.error("Failed to remove item");
       console.error("Remove item error:", err);
@@ -139,9 +142,12 @@ const CartPage: React.FC = () => {
           <Col xs={24} lg={16}>
             <List
               itemLayout="horizontal"
-              dataSource={cart.items}
-              renderItem={(item) => {
-                const price = item.game.discountedPrice ?? item.game.price;
+              dataSource={cart?.items ?? []}
+              renderItem={(item: CartItemResponseSchema) => {
+                // Cannot display price/details without fetching game info
+                const price = 0; // Placeholder
+                const thumbnailUrl = `/placeholder-image.jpg`; // Placeholder
+
                 return (
                   <List.Item
                     actions={[
@@ -167,19 +173,15 @@ const CartPage: React.FC = () => {
                         icon={<DeleteOutlined />}
                         onClick={() => handleRemoveItem(item)}
                         disabled={isMutating}
-                        aria-label={`Remove ${item.game.title}`}
+                        aria-label={`Remove item ${item.game_id}`}
                       />,
                     ]}
                   >
                     <List.Item.Meta
                       avatar={
                         <Image
-                          src={
-                            item.game.thumbnail === "/placeholder-image.jpg"
-                              ? `https://cataas.com/cat/says/cart-item-${item.game.id}?width=80&height=80`
-                              : item.game.thumbnail
-                          }
-                          alt={item.game.title}
+                          src={thumbnailUrl}
+                          alt={`Game ${item.game_id}`}
                           width={80}
                           height={80}
                           style={{ objectFit: "cover" }}
@@ -188,8 +190,9 @@ const CartPage: React.FC = () => {
                         />
                       }
                       title={
-                        <Link to={`/games/${item.game.id}`}>
-                          {item.game.title}
+                        <Link to={`/games/${item.game_id}`}>
+                          {/* TODO: Display Game Title (needs fetching) */}
+                          Game ID: {item.game_id}
                         </Link>
                       }
                       description={`$${price.toFixed(2)} each`}
