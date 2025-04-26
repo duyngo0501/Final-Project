@@ -10,10 +10,10 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 
-from app.core.config import settings
-from app.schemas.auth import UserIn
-from supabase import AsyncClientOptions
+from app.config import settings
+from app.schemas.db_auth import UserIn
 from supabase._async.client import AsyncClient, create_client
+from supabase import AsyncClientOptions
 
 
 async def get_super_client() -> AsyncClient:
@@ -28,6 +28,13 @@ async def get_super_client() -> AsyncClient:
     Raises:
         HTTPException: If the Supabase client fails to initialize (status 500).
     """
+    # --- Remove logging for debugging --- #
+    # logging.info(f"Attempting to create Supabase client.")
+    # logging.info(f"Using SUPABASE_URL: {settings.SUPABASE_URL}")
+    # logging.info(
+    #     f"SUPABASE_KEY is set: {bool(settings.SUPABASE_KEY)}"
+    # )
+    # --------------------------------- #
     try:
         super_client = await create_client(
             settings.SUPABASE_URL,
@@ -43,6 +50,11 @@ async def get_super_client() -> AsyncClient:
             raise ValueError("Supabase client creation returned None")
         return super_client
     except Exception as e:
+        # --- Add detailed exception logging --- #
+        logging.error(
+            f"Detailed error initializing Supabase client: {type(e).__name__} - {repr(e)}"
+        )
+        # -------------------------------------- #
         logging.error(f"Failed to initialize Supabase super client: {e}")
         raise HTTPException(
             status_code=500, detail="Supabase admin client could not be initialized"

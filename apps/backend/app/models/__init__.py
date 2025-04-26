@@ -1,22 +1,29 @@
-# Import all SQLModels to make them available when importing from 'app.models'
-from .cart import CartEntryItem, ShoppingCartItem
-from .custom_game import CustomGame
-from .game import GameItem, GamePromotionLink
-from .order import Order, OrderItem
-from .promotion import PromotionItem
-from .user import UserItem
+"""SQLModel Modules"""
 
-# Remove old base reference if not needed
-# from .base import InDBBase  # noqa F401
+# Import all models to ensure they are registered with SQLModel metadata
+# and accessible for relationships and Alembic detection.
+
+# Remove the incorrect import for Base
+# from .model_base import Base
+from .model_game import Game  # Import the new Game model
+
+# Remove imports for old GameItem and GamePromotionLink if they were replaced
+# from .model_game import GameItem, GamePromotionLink
+from .model_cart import CartEntryItem, ShoppingCartItem
+from .model_order import Order, OrderItem
+from .model_promotion import PromotionItem
+from .model_user import UserItem
+
+# Remove old base reference if not n
 
 # Define __all__ for explicit exports
 __all__ = [
     "UserItem",
-    "GameItem",
+    "Game",  # Ensure Game is exported
     "Order",
     "OrderItem",
     "ShoppingCartItem",
     "CartEntryItem",
-    "PromotionItem",
-    "CustomGame",
+    "PromotionItem",  # Ensure PromotionItem is exported
+    # "CustomGame", # Remove CustomGame from export
 ]

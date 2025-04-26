@@ -15,11 +15,17 @@ from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.config import LOGGING_CONFIG
 
-from app.api.main import api_router
-from app.core.config import Settings
-from app.core.middleware import TracebackMiddleware
+# Alembic imports for auto-migration
+from alembic import command
+from alembic.config import Config
 
-from .utils import custom_generate_unique_id
+from app.routes.routers import api_router
+from app.config import Settings
+from app.core.middleware import TracebackMiddleware
+from app.utils import custom_generate_unique_id
+from app.core.db import engine
+from app.services.sync_service import sync_rawg_games
+from sqlmodel import Session
 
 # Remove individual router imports
 # from app.api.routes import (
@@ -36,15 +42,55 @@ settings = Settings()
 
 logger = logging.getLogger("uvicorn")
 
+# Print settings at startup for debugging .env loading
+print("--- Loading Settings ---")
+print(f"SUPABASE_URL: {settings.SUPABASE_URL}")
+print(f"SUPABASE_KEY Loaded: {(settings.SUPABASE_KEY)}")  # Don't print the actual key!
+print(f"API_V1_STR: {settings.API_V1_STR}")
+print("-----------------------\n")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa ARG001
     """life span events"""
+    # --- Database Session for Startup Tasks --- #
+    # Use a context manager for the session
+    session: Session | None = None
     try:
-        logger.info("lifespan start")
-        yield
+        with Session(engine) as session:
+            logger.info("lifespan start")
+            # --- Run Alembic migrations on startup --- #
+            logger.info("Running database migrations...")
+            alembic_cfg = Config("alembic.ini")
+            alembic_cfg.set_main_option(
+                "sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI
+            )
+            try:
+                command.upgrade(alembic_cfg, "head")
+                logger.info("Database migrations completed successfully.")
+
+                # --- Run RAWG Sync (after successful migration) --- #
+                logger.info("Starting RAWG sync...")
+                logger.info("Attempting to call sync_rawg_games function...")
+                try:
+                    # WARNING: Calling synchronous function in async context
+                    # Consider using run_in_threadpool or making client async
+                    await sync_rawg_games(
+                        session=session, pages_to_sync=1
+                    )  # Use the session
+                    logger.info("RAWG sync attempted.")
+                except Exception as sync_exc:
+                    logger.error(f"Error during RAWG sync: {sync_exc}", exc_info=True)
+                # -------------------------------------------------- #
+
+            except Exception as e:
+                logger.error(f"Database migration failed: {e}", exc_info=True)
+            # ------------------------------------------ #
+            # logger.info("Skipping migrations and sync during this startup for debugging.") # Remove info message
+            yield  # Application runs here
     finally:
         logger.info("lifespan exit")
+        # Session is automatically closed by the 'with' statement
 
 
 # init FastAPI with lifespan
@@ -71,11 +117,6 @@ if settings.all_cors_origins:
 
 # Include the main aggregated router with API version prefix
 app.include_router(api_router, prefix=settings.API_V1_STR)  # e.g., prefix="/api/v1"
-
-
-# @app.get("/", tags=["root"])
-# async def read_root() -> dict[str, str]:
-#     return {"Hello": "World"}
 
 
 # Logger

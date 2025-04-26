@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+supabase
+python-dotenv
+SQLAlchemy
+alembic
+# asyncpg
+psycopg2-binary
+# --- Optional dependencies below ---
+# ... maybe others ... 

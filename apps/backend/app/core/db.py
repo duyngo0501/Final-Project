@@ -7,7 +7,7 @@ from collections.abc import Generator
 
 from sqlmodel import Session, create_engine
 
-from app.core.config import settings
+from app.config import settings
 
 # NOTE: Models should be imported elsewhere (e.g., in alembic env.py or crud operations)
 # to ensure SQLModel registers them before any operations.
