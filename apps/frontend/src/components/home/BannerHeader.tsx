@@ -1,48 +1,85 @@
 import React from "react";
-import { Carousel, Image } from "antd";
+import { Carousel, Image, Spin, Alert, Typography } from "antd";
+import { Link } from "react-router-dom"; // Import Link for navigation
+import { useGames } from "@/hooks/useGames"; // Import the hook to fetch real game data
+import { Game } from "@/types/game"; // Import the Game type
 
-// Placeholder data for banner slides
-const bestSellingGames = [
-  { id: 1, title: "Game A", imageUrl: "/images/banner1.jpg", link: "/games/a" },
-  { id: 2, title: "Game B", imageUrl: "/images/banner2.jpg", link: "/games/b" },
-  { id: 3, title: "Game C", imageUrl: "/images/banner3.jpg", link: "/games/c" },
-];
+const { Text } = Typography;
 
-const contentStyle: React.CSSProperties = {
-  margin: 0,
-  height: "400px", // Adjust height as needed
-  color: "#fff",
-  lineHeight: "400px",
-  textAlign: "center",
-  background: "#364d79", // Fallback background
-};
+// Remove placeholder data
+// const bestSellingGames = [...];
+
+// Define a fixed height for consistency
+const BANNER_HEIGHT = "400px";
 
 /**
- * @description Banner header slideshow displaying best-selling games.
- * Uses Ant Design Carousel component.
+ * @description Banner header slideshow displaying featured games.
+ * Fetches game data using useGames hook.
  * @returns {React.FC} The BannerHeader component.
  */
 const BannerHeader: React.FC = () => {
+  // Fetch first 3 games (adjust pageSize as needed)
+  const { games, isLoading, isError } = useGames({ pageSize: 3 });
+
+  // Style for the container of loading/error/empty states
+  const stateContainerStyle: React.CSSProperties = {
+    height: BANNER_HEIGHT,
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f2f5", // Use a standard Ant Design background color
+  };
+
+  if (isLoading) {
+    return (
+      <div style={stateContainerStyle}>
+        <Spin size="large" tip="Loading Games..." />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div style={stateContainerStyle}>
+        <Alert
+          message="Error Loading Banner"
+          description="Could not load featured games."
+          type="error"
+          showIcon
+        />
+      </div>
+    );
+  }
+
+  if (!games || games.length === 0) {
+    return (
+      <div style={stateContainerStyle}>
+        {/* Use Ant Design Typography for empty state message */}
+        <Text type="secondary">No featured games available.</Text>
+      </div>
+    );
+  }
+
   return (
     <Carousel autoplay dotPosition="bottom" style={{ marginBottom: "20px" }}>
-      {bestSellingGames.map((game) => (
+      {/* Map over fetched games data */}
+      {games.map((game: Game) => (
         <div key={game.id}>
-          <a href={game.link}>
+          {/* Use Link component for internal navigation with query parameter */}
+          <Link to={`/games?id=${game.id}`}>
             <Image
-              src={`https://cataas.com/cat/says/banner-${game.id}?width=1000&height=400`}
+              src={game.thumbnail}
               alt={game.title}
               preview={false}
               style={{
-                ...contentStyle,
+                // Apply styles directly to Image
                 width: "100%",
-                height: "100%",
-
-                objectFit: "cover",
-              }} // Ensure image covers the area
+                height: BANNER_HEIGHT, // Use defined height
+                objectFit: "cover", // Ensure image covers the area well
+              }}
+              fallback="/placeholder-image.jpg"
             />
-            {/* Optional: Add title overlay if needed */}
-            {/* <h3 style={{ position: 'absolute', bottom: '20px', left: '20px', color: 'white' }}>{game.title}</h3> */}
-          </a>
+          </Link>
         </div>
       ))}
     </Carousel>

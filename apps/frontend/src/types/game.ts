@@ -2,7 +2,7 @@
  * @description Represents the structure of a game object used throughout the application.
  */
 export interface Game {
-  id: number;
+  id: string;
   title: string;
   thumbnail: string; // URL to the game's thumbnail image
   price: number; // Original price

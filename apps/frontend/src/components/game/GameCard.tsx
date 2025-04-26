@@ -7,21 +7,20 @@ const { Title, Text, Paragraph } = Typography;
 
 interface GameCardProps {
   game: Game;
-  onAddToCart?: (game: Game) => void; // Optional callback for adding to cart
-  isAddingToCart?: boolean; // Add prop for loading state
+  onAddToCart?: (game: Game) => void;
+  isAddingToCart?: boolean;
   className?: string;
 }
 
 /**
- * @description A visually appealing card component to display game information.
- * Shows thumbnail, title, price (with discount handling), category, and an add-to-cart button.
+ * @description Displays game information. Handles missing price.
  * @param {GameCardProps} props Component props.
  * @returns {React.ReactElement} The rendered GameCard component.
  */
 const GameCard: React.FC<GameCardProps> = ({
   game,
   onAddToCart,
-  isAddingToCart, // Destructure the new prop
+  isAddingToCart,
   className,
 }) => {
   const {
@@ -35,12 +34,11 @@ const GameCard: React.FC<GameCardProps> = ({
   } = game;
 
   const handleAddToCart = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card click if button is clicked
+    e.stopPropagation();
     onAddToCart?.(game);
   };
 
-  const hasDiscount =
-    typeof discountedPrice === "number" && discountedPrice < price;
+  const displayPrice = price >= 0;
 
   return (
     <Card
@@ -50,11 +48,7 @@ const GameCard: React.FC<GameCardProps> = ({
       cover={
         <Image
           alt={title}
-          src={
-            thumbnail === "/placeholder-image.jpg"
-              ? `https://cataas.com/cat/says/game-${id}?width=300&height=180`
-              : thumbnail
-          }
+          src={thumbnail}
           style={{ height: 180, objectFit: "cover" }}
           preview={false}
           fallback="/placeholder-image.jpg"
@@ -69,7 +63,7 @@ const GameCard: React.FC<GameCardProps> = ({
           disabled={!onAddToCart || isAddingToCart}
           loading={isAddingToCart}
         >
-          Add to Cart
+          {displayPrice ? "Add to Cart" : "Details"}
         </Button>,
       ]}
     >
@@ -87,22 +81,17 @@ const GameCard: React.FC<GameCardProps> = ({
                 {description}
               </Paragraph>
             )}
-            <Space align="baseline" wrap size="small">
-              {hasDiscount ? (
-                <>
-                  <Text strong style={{ fontSize: "1.1em", color: "#f5222d" }}>
-                    ${discountedPrice?.toFixed(2)}
-                  </Text>
-                  <Text delete type="secondary">
-                    ${price.toFixed(2)}
-                  </Text>
-                </>
-              ) : (
+            {displayPrice ? (
+              <Space align="baseline" wrap size="small">
                 <Text strong style={{ fontSize: "1.1em" }}>
                   ${price.toFixed(2)}
                 </Text>
-              )}
-            </Space>
+              </Space>
+            ) : (
+              <Text type="secondary" style={{ fontStyle: "italic" }}>
+                Price unavailable
+              </Text>
+            )}
           </Space>
         }
       />

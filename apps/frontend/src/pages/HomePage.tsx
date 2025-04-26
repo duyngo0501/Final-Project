@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import { Layout, Row, Col, Spin, Alert, message } from "antd";
 import Navbar from "@/components/layout/Navbar"; // Assuming Navbar is in layout
 import BannerHeader from "@/components/home/BannerHeader";
-import PromotionBanner from "@/components/home/PromotionBanner";
+// import PromotionBanner from "@/components/home/PromotionBanner"; // Removed import
 import GameCategories from "@/components/home/GameCategories";
 import GameGrid from "@/components/home/GameGrid";
 import { useCart } from "@/contexts/CartContext"; // Import the cart hook
@@ -19,7 +19,7 @@ const { Content } = Layout;
  */
 const HomePage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>("pc"); // Default category
-  const { addItem: addToCart } = useCart(); // Get addItem function from context
+  const addToCart = useCart((state) => state.addItem);
 
   // Use the SWR hook to fetch games based on the selected category
   const { games, isLoading, isError } = useGames({
@@ -46,7 +46,7 @@ const HomePage: React.FC = () => {
         {" "}
         {/* Added top margin */}
         <BannerHeader /> {/* Displays best-selling games */}
-        <PromotionBanner /> {/* Displays promotions */}
+        {/* <PromotionBanner /> */} {/* Removed usage */}
         <Row justify="center" style={{ marginBottom: "20px" }}>
           <Col xs={24} sm={20} md={16} lg={14}>
             <GameCategories onCategoryChange={handleCategoryChange} />

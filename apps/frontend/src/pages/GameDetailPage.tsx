@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { gamesAPI } from "@/services/api";
-import { CartContext } from "@/contexts/CartContext";
+import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Spin,
@@ -28,9 +28,11 @@ const { Title, Paragraph, Text } = Typography;
  * @returns {JSX.Element} The rendered game detail page.
  */
 const GameDetailPage = (): JSX.Element => {
-  const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const id = searchParams.get("id");
   const navigate = useNavigate();
-  const cartContext = useContext(CartContext);
+  const cartContextValue = useCart((state) => state);
+  const addItem = cartContextValue?.addItem;
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
 
   const [game, setGame] = useState<Game | null>(null);
@@ -39,33 +41,22 @@ const GameDetailPage = (): JSX.Element => {
   const [quantity, setQuantity] = useState<number>(1);
   const [addingToCart, setAddingToCart] = useState<boolean>(false);
 
-  if (!cartContext) {
-    return <Spin tip="Loading Context..." fullscreen />;
-  }
-  const { addItem } = cartContext;
-
   useEffect(() => {
     const fetchGame = async () => {
       if (!id) {
-        setError("Game ID is missing.");
+        setError("Game ID not found in URL.");
         setLoading(false);
         return;
       }
-      setError(null);
       setLoading(true);
       try {
         const response = await gamesAPI.getGameById(id);
         setGame(response.data);
+        setError(null);
       } catch (err: any) {
-        console.error("Error fetching game:", err);
-        if (err.response?.status === 404) {
-          setError("Game not found.");
-        } else {
-          setError(
-            err.message ||
-              "Failed to load game details. Please try again later."
-          );
-        }
+        console.error("Fetch game error:", err);
+        setError(err.message || "Failed to fetch game details");
+        setGame(null);
       } finally {
         setLoading(false);
       }
@@ -76,10 +67,15 @@ const GameDetailPage = (): JSX.Element => {
 
   const handleAddToCart = async () => {
     if (!isAuthenticated) {
-      navigate("/login", { state: { from: `/games/${id}` } });
+      navigate("/login", { state: { from: `/games?id=${id}` } });
       return;
     }
-    if (!game) return;
+    if (!game || !addItem) {
+      message.error(
+        !game ? "Game data not loaded." : "Cart functionality not available."
+      );
+      return;
+    }
 
     setAddingToCart(true);
     try {
@@ -95,132 +91,96 @@ const GameDetailPage = (): JSX.Element => {
   };
 
   const handleQuantityChange = (value: number | null) => {
-    if (value === null || !game || !game.stock) return;
-    const newQuantity = Math.max(1, Math.min(game.stock, value));
-    setQuantity(newQuantity);
+    if (value !== null) {
+      setQuantity(value);
+    }
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center min-h-[calc(100vh-200px)]">
-        <Spin size="large" />
-      </div>
-    );
+    return <Spin tip="Loading game details..." fullscreen />;
   }
 
-  if (error && !game) {
+  if (error) {
     return (
-      <Result
-        status={error === "Game not found." ? "404" : "error"}
-        title={
-          error === "Game not found." ? "Game Not Found" : "Error Loading Game"
-        }
-        subTitle={error}
-        extra={
-          <Button type="primary" onClick={() => navigate("/games")}>
-            Back to Games
-          </Button>
-        }
-        className="py-12"
-      />
+      <div style={{ padding: "50px", textAlign: "center" }}>
+        <Title level={3} style={{ color: "red" }}>
+          Error Loading Game
+        </Title>
+        <Paragraph>{error}</Paragraph>
+        <Button type="primary" onClick={() => navigate("/games")}>
+          Back to Games List
+        </Button>
+      </div>
     );
   }
 
   if (!game) {
     return (
-      <Result
-        status="404"
-        title="Game Not Found"
-        subTitle="Sorry, the game you visited does not exist."
-        extra={
-          <Button type="primary" onClick={() => navigate("/games")}>
-            Back To Games
-          </Button>
-        }
-        className="py-12"
-      />
+      <div style={{ padding: "50px", textAlign: "center" }}>
+        <Title level={3}>Game Not Found</Title>
+        <Paragraph>The game you are looking for could not be found.</Paragraph>
+        <Button type="primary" onClick={() => navigate("/games")}>
+          Back to Games List
+        </Button>
+      </div>
     );
   }
 
-  const canAddToCart = typeof game.stock === "number" && game.stock > 0;
-  const stockAvailable = typeof game.stock === "number" ? game.stock : "N/A";
-
   return (
-    <div className="max-w-5xl mx-auto p-4">
-      <Card>
-        <Row gutter={[24, 24]}>
-          <Col xs={24} md={10}>
-            <Image
-              width="100%"
-              src={`https://cataas.com/cat/says/game-${game.id}?width=400&height=300`}
-              alt={game.title}
-              className="rounded-lg object-contain max-h-[500px]"
-              fallback="https://via.placeholder.com/400x300?text=CAT"
-              preview
+    <div style={{ padding: "20px" }}>
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={10}>
+          <Image
+            width="100%"
+            src={game.imageUrl || "/placeholder-image.png"}
+            alt={game.title}
+            preview={false}
+          />
+        </Col>
+        <Col xs={24} md={14}>
+          <Title level={2}>{game.title}</Title>
+          <Paragraph>{game.description}</Paragraph>
+          <Divider />
+          <Text strong>Price:</Text> ${game.price?.toFixed(2)}
+          <br />
+          <Text strong>Genre:</Text> {game.genre}
+          <br />
+          <Text strong>Platform:</Text> {game.platform}
+          <br />
+          <Text strong>Release Date:</Text>{" "}
+          {game.releaseDate
+            ? new Date(game.releaseDate).toLocaleDateString()
+            : "N/A"}
+          <br />
+          <Text strong>Developer:</Text> {game.developer}
+          <br />
+          <Text strong>Publisher:</Text> {game.publisher}
+          <br />
+          <div>
+            <Text strong>Tags:</Text>{" "}
+            {game.tags?.map((tag) => <Tag key={tag}>{tag}</Tag>) ?? "No tags"}
+          </div>
+          <Divider />
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <InputNumber
+              min={1}
+              max={10}
+              defaultValue={1}
+              value={quantity}
+              onChange={handleQuantityChange}
             />
-          </Col>
-          <Col xs={24} md={14}>
-            <Title level={2}>{game.title}</Title>
-            <Paragraph type="secondary" className="mb-4">
-              {game.category || "Category not specified"}
-            </Paragraph>
-
-            <Paragraph className="mb-6 text-base">
-              {game.description || "No description available."}
-            </Paragraph>
-
-            <div className="mb-6">
-              <Text strong className="text-3xl mr-4">
-                {game.discountedPrice !== undefined &&
-                game.discountedPrice < game.price ? (
-                  <Space>
-                    <Text delete type="secondary">
-                      ${game.price.toFixed(2)}
-                    </Text>
-                    <Text style={{ color: "red" }}>
-                      ${game.discountedPrice.toFixed(2)}
-                    </Text>
-                  </Space>
-                ) : (
-                  `$${game.price.toFixed(2)}`
-                )}
-              </Text>
-              {canAddToCart ? (
-                <Tag color="green">In Stock ({stockAvailable} available)</Tag>
-              ) : (
-                <Tag color="red">Out of Stock</Tag>
-              )}
-            </div>
-
-            {canAddToCart && (
-              <div className="mb-6">
-                <Text strong className="block mb-2">
-                  Quantity
-                </Text>
-                <InputNumber
-                  min={1}
-                  max={game.stock}
-                  value={quantity}
-                  onChange={handleQuantityChange}
-                  size="large"
-                  style={{ width: "100px" }}
-                />
-              </div>
-            )}
-
             <Button
               type="primary"
-              size="large"
+              icon={<ShoppingCartOutlined />}
               onClick={handleAddToCart}
-              disabled={!canAddToCart || addingToCart || !addItem}
               loading={addingToCart}
-              block
+              disabled={!addItem}
             >
-              {canAddToCart ? "Add to Cart" : "Out of Stock"}
+              Add to Cart
             </Button>
-          </Col>
-        </Row>
-      </Card>
+          </div>
+        </Col>
+      </Row>
     </div>
   );
 };

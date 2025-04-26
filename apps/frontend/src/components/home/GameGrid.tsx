@@ -44,7 +44,7 @@ const GameGrid: React.FC<GameGridProps> = ({
 
   // Render a single card (for both grid and list)
   const renderCard = (game: Game) => (
-    <Link to={`/games/${game.id}`} style={{ textDecoration: "none" }}>
+    <Link to={`/games?id=${game.id}`} style={{ textDecoration: "none" }}>
       <GameCard
         game={game} // Pass game data
         onAddToCart={onQuickBuy} // Pass the quick buy handler

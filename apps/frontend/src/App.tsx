@@ -31,7 +31,6 @@ function App(): JSX.Element {
             <Route path="/" element={<MainLayout />}>
               <Route index element={<HomePage />} />
               <Route path="games" element={<GamesPage />} />
-              <Route path="games/:id" element={<GameDetailPage />} />
               <Route path="blog" element={<BlogPage />} />
               <Route path="blog/:postId" element={<BlogPostDetailPage />} />
               <Route

@@ -1,6 +1,11 @@
 import axios from "axios";
-
-import type { AxiosError, AxiosRequestConfig, AxiosResponse } from "axios";
+import type {
+  AxiosError,
+  AxiosRequestConfig,
+  AxiosResponse,
+  AxiosRequestHeaders, // Import specific header type
+} from "axios";
+import { supabase } from "@/lib/supabaseClient"; // Import the Supabase client
 
 /**
  * Subset of AxiosRequestConfig
@@ -18,7 +23,7 @@ export type RequestConfig<TData = unknown> = {
     | "text"
     | "stream";
   signal?: AbortSignal;
-  headers?: AxiosRequestConfig["headers"];
+  headers?: AxiosRequestConfig["headers"]; // Keep this general for input
 };
 /**
  * Subset of AxiosResponse
@@ -38,8 +43,42 @@ export type ResponseErrorConfig<TError = unknown> = {
 };
 
 export const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_PUBLIC_API_URL,
 });
+
+// --- Axios Request Interceptor ---
+axiosInstance.interceptors.request.use(
+  async (config) => {
+    // Ensure headers object exists
+    if (!config.headers) {
+      config.headers = {} as AxiosRequestHeaders; // Initialize headers if undefined
+    }
+
+    // Get the current session from Supabase
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error("Error getting Supabase session in interceptor:", error);
+      // Optionally handle error
+    } else if (session?.access_token) {
+      // Set the Authorization header directly on the headers object
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    } else {
+      // Handle case where there is no session (user not logged in)
+      // Optional: delete config.headers.Authorization;
+    }
+
+    return config;
+  },
+  (error) => {
+    // Handle request error
+    console.error("Axios request interceptor error:", error);
+    return Promise.reject(error);
+  }
+);
 
 // Will be used by kubb.config.ts
 export const client = async <TData, TError = unknown, TVariables = unknown>(

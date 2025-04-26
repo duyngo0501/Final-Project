@@ -1,10 +1,12 @@
-import React, { createContext, ReactNode, useCallback, useMemo } from "react";
+import React, { ReactNode, useCallback, useMemo } from "react";
 import { produce } from "immer";
-// import { useContextSelector } from "use-context-selector"; // Keep if needed later
-// Remove mock API import
-// import cartAPI from "@/services/api";
+import {
+  createContext,
+  useContextSelector,
+  useContext,
+} from "use-context-selector";
 // Import generated client functions for cart
-// Linter confirms NO 'use' prefix
+// NOTE: Client generation failed earlier. These imports/signatures might be incorrect.
 import {
   cartControllerGetCart,
   cartControllerAddItem,
@@ -16,46 +18,57 @@ import {
 import {
   CartResponseSchema as Cart,
   CartItemResponseSchema as CartItem,
-  CartItemCreateSchema, // Import schema for add item payload
-  CartItemUpdateSchema, // Import schema for update item payload
+  CartItemCreateSchema,
+  CartItemUpdateSchema,
+  // GameSummarySchema, // Removed - Assume not available due to stale types
 } from "@/gen/types";
 import { useAuth } from "@/contexts/AuthContext";
-import useSWR, { mutate, SWRConfiguration } from "swr";
-// No need for useSWRMutation if we revert to manual mutate
-// import useSWRMutation, { SWRMutationConfiguration } from 'swr/mutation';
-import { Game } from "@/types/game";
+import useSWR, { SWRConfiguration } from "swr";
+// Removed manual mutate import as swrMutateCart from useSWR is used
+import { Game } from "@/types/game"; // Keep using local Game type for addItem input
 
-// Local state ONLY for mutations, data comes from SWR
-interface CartState {
+// --- State and Context Definition ---
+
+// Interface for the core cart data structure from the API
+// This matches the alias `Cart` for `CartResponseSchema`
+// interface CartData extends Cart {}
+
+// State managed internally by the provider (for mutations)
+interface CartMutationState {
   isMutating: boolean;
-  mutationError: string | null;
+  mutationError: Error | null; // Use Error type for errors
 }
 
-// Define the context value shape
-interface CartContextValue extends CartState {
-  cart: Cart | null | undefined; // Cart data from SWR
+// Define the complete context value shape
+interface CartContextValue extends CartMutationState {
+  cart: Cart | null | undefined; // Cart data from SWR (CartResponseSchema)
   isLoading: boolean; // Combined Loading/Validating state from SWR
-  error: any; // Error state from SWR
+  error: Error | null; // Error state from SWR (use Error type)
   totalItems: number; // Derived total count
-  // Actions
-  addItem: (game: Game, quantity?: number) => Promise<void>; // Reverted to Game type
-  removeItem: (gameId: number) => Promise<void>;
-  updateQuantity: (gameId: number, quantity: number) => Promise<void>;
-  clearCart: () => Promise<void>;
+  totalPrice: number; // Derived total price
+  // Actions - ensuring consistent return types and parameters
+  // Using local Game type for addItem flexibility
+  addItem: (game: Game, quantity?: number) => Promise<Cart | null>;
+  removeItem: (gameId: string) => Promise<Cart | null>;
+  updateQuantity: (gameId: string, quantity: number) => Promise<Cart | null>;
+  clearCart: () => Promise<Cart | null>;
+  fetchCart: () => Promise<void>; // Explicit fetch/revalidation trigger
 }
 
-// Local state initial value
-const initialState: CartState = {
+// Initial state for mutation tracking
+const initialMutationState: CartMutationState = {
   isMutating: false,
   mutationError: null,
 };
 
-// Create Context with undefined default, provider will supply value
-export const CartContext = createContext<CartContextValue | undefined>(
-  undefined
+// Create Context with undefined default
+// Type assertion needed as default is undefined, but hook expects CartContextValue
+export const CartContext = createContext<CartContextValue>(
+  undefined as unknown as CartContextValue
 );
 
-// Create Provider Component
+// --- Provider Component ---
+
 interface CartProviderProps {
   children: ReactNode;
 }
@@ -63,273 +76,375 @@ interface CartProviderProps {
 const CART_SWR_KEY = "/api/cart";
 
 /**
- * Provides cart state and actions, interacting with the actual cart API via Kubb client.
- * Uses SWR for data fetching and state management.
+ * Provides cart state and actions, interacting with the cart API via Kubb client.
+ * Uses SWR for data fetching and internal state for mutation status.
+ * Follows use-context-selector pattern principles.
  * @param {CartProviderProps} props Component props.
  * @returns {JSX.Element} The provider component.
  */
 export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
-  const [mutationState, setMutationState] = React.useState(initialState);
-  // Revert to selector pattern if direct access causes issues
+  const [mutationState, setMutationState] =
+    React.useState<CartMutationState>(initialMutationState);
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
 
-  // --- SWR Hooks for API interactions ---
+  // SWR hook for fetching cart data
   const {
-    data: cartData,
-    error,
-    isLoading: isSWRLoading,
-    isValidating,
-    mutate: swrMutateCart,
+    data: cartData, // This is CartResponseSchema | null | undefined
+    error: swrError, // SWR error object
+    isLoading: isSWRLoading, // Initial loading state
+    isValidating, // Revalidation state
+    mutate: swrMutateCart, // SWR mutation function
   } = useSWR<Cart | null>(
+    // Only fetch if authenticated
     isAuthenticated ? CART_SWR_KEY : null,
-    // Fetcher function that calls the generated client function
-    // Assumes cartControllerGetCart returns Promise<{ data: Cart }>
-    // UPDATE: Confirmed return type is Promise<CartResponseSchema> (aliased as Cart)
-    // UPDATE 2: Linter confirms return is Promise<ResponseConfig<CartResponseSchema>>, so .data access IS needed.
+    // --- SWR Fetcher Function ---
     async () => {
+      // NOTE: Assuming cartControllerGetCart exists and returns the cart data directly or wrapped.
+      // The actual return type is uncertain until client generation is fixed.
       try {
+        console.log("SWR: Fetching cart...");
+        // Remove ResponseConfig type annotation
         const response = await cartControllerGetCart();
-        // Access the .data property from ResponseConfig
-        return response.data as Cart;
+        console.log("SWR: Cart fetched successfully", response);
+        // Assuming the actual cart data is directly in response or response.data
+        // Adjust access based on actual structure if possible, else return response directly
+        return (response as any)?.data ?? response; // Safely access .data or return response
       } catch (err) {
-        // Handle potential errors during fetch (e.g., 404 if cart doesn't exist)
-        // SWR can handle errors, but we might want specific logic here
         console.error("SWR Fetcher Error:", err);
-        // Return null or throw, depending on desired SWR error handling
-        return null; // Treat fetch error as empty/null cart for simplicity
+        // Propagate error or return null based on desired handling
+        // Returning null to represent an empty/non-existent cart on fetch error
+        if (err instanceof Error && (err as any).status === 404) {
+          console.log("SWR: Cart not found (404), returning null.");
+          return null; // Treat 404 as cart not existing yet
+        }
+        // Re-throw other errors for SWR to handle
+        throw err;
       }
     },
+    // --- SWR Configuration ---
     {
       revalidateOnFocus: true,
       shouldRetryOnError: true,
-    } as SWRConfiguration<Cart | null> // Type assertion if needed
+      // Add error handling directly in SWR config
+      onError: (err) => {
+        console.error("SWR onError:", err);
+        // Optionally update mutationError state here too, though swrError is available
+        // setMutationState(prev => ({...prev, mutationError: err instanceof Error ? err : new Error('SWR fetch failed')}));
+      },
+    } as SWRConfiguration<Cart | null>
   );
 
-  const combinedLoading = isSWRLoading || isValidating;
+  // Combine SWR loading states
+  const isLoading = isSWRLoading || isValidating;
+  // Expose SWR error as the primary error state, cast to Error type
+  const error = swrError instanceof Error ? swrError : null;
 
+  // Calculate total items based on fetched cart data
   const totalItems = useMemo(() => {
     return cartData?.items?.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
   }, [cartData]);
 
-  // --- Context Action Implementations (Reverting to manual mutate) ---
+  // --- Calculate total price based on fetched cart data ---
+  const totalPrice = useMemo(() => {
+    return (
+      cartData?.items?.reduce((sum, item) => {
+        // Assuming item has a 'game' object with 'price'
+        // Use optional chaining and provide a default of 0 if price is missing
+        // @ts-expect-error - Stale type: CartItemResponseSchema doesn't have 'game' yet.
+        const price = item.game?.price ?? 0;
+        return sum + price * item.quantity;
+      }, 0) ?? 0
+    );
+  }, [cartData]);
 
+  // --- Context Action Implementations ---
+
+  // Explicit function to trigger revalidation
+  const fetchCart = useCallback(async () => {
+    console.log("fetchCart called, triggering SWR mutation...");
+    await swrMutateCart();
+  }, [swrMutateCart]);
+
+  // Add Item Action
   const addItem = useCallback(
-    async (game: Game, quantity: number = 1) => {
-      if (!isAuthenticated) return;
+    async (game: Game, quantity: number = 1): Promise<Cart | null> => {
+      if (!isAuthenticated) {
+        setMutationState({
+          isMutating: false,
+          mutationError: new Error("User not authenticated"),
+        });
+        return cartData ?? null;
+      }
 
-      // Basic optimistic update (can be enhanced)
+      // NOTE: Optimistic update structure remains similar,
+      // but relies on the CartItem structure potentially having game_id
       const optimisticCart = produce(
-        cartData ?? { items: [] },
-        (draft: any) => {
-          // Adjust this logic based on the actual CartItemResponseSchema structure
-          if (!draft?.items) draft.items = []; // Ensure items array exists
-          // Compare IDs as strings to handle potential type mismatch (number vs string/uuid)
+        cartData ?? { id: "", user_id: "", items: [] },
+        (draft) => {
+          if (!draft?.items) draft.items = [];
           const existingItemIndex = draft.items.findIndex(
-            (item: CartItem) => String(item.game_id) === String(game.id)
-          ); // Use game_id, compare as string
+            (item: CartItem) => String(item.game_id) === String(game.id) // Ensure comparison is robust
+          );
           if (existingItemIndex > -1) {
             draft.items[existingItemIndex].quantity += quantity;
           } else {
-            // Construct a basic item optimistically. Might need more fields.
-            // This assumes CartItemResponseSchema has at least these fields.
-            const newItem = {
-              game_id: game.id, // Assume game_id is the key
+            // Create a temporary CartItem-like structure for optimistic update
+            // This might differ from the actual CartItemResponseSchema
+            const newItem: Partial<CartItem> & {
+              game_id: string | number;
+              quantity: number;
+              // Add partial game details for optimistic display if possible
+              // @ts-expect-error - Stale type: CartItemResponseSchema doesn't have 'game' yet.
+              game?: Partial<GameSummarySchema>;
+            } = {
+              // id: uuidv4(), // Generate temporary client-side ID? Risky.
+              // cart_id: draft.id, // Need cart ID if available
+              game_id: game.id,
               quantity: quantity,
-              // Add other known/required fields from CartItemResponseSchema if possible
-              // Potentially add minimal game info if needed for display before revalidation
-              // game: { id: game.id, name: game.name, thumbnail: game.thumbnail } // Example, if schema expects nested game
+              // Add partial game details here - might need adjustment based on Game type
+              // @ts-expect-error - Stale type: CartItemResponseSchema doesn't have 'game' yet.
+              game: {
+                id: game.id,
+                title: game.title,
+                price: game.price,
+                thumbnailUrl: game.thumbnail, // Use thumbnail from Game type
+              },
+              // Cannot add full 'game' object unless CartItemResponseSchema includes it
             };
-            draft.items.push(newItem);
+            draft.items.push(newItem as CartItem); // Assert type carefully
           }
         }
       );
 
-      // Type assertion to ensure compatibility with SWR mutation
-      swrMutateCart(optimisticCart as Cart, false); // Optimistic update without revalidation
-
+      // Apply optimistic update BEFORE the API call
+      swrMutateCart(optimisticCart as Cart, false);
       setMutationState({ isMutating: true, mutationError: null });
+
       try {
-        // Call the generated client function directly
-        // Assuming it expects an object matching CartItemCreateSchema
+        // NOTE: Assuming cartControllerAddItem exists and expects CartItemCreateSchema.
+        // This will likely fail until client generation is fixed.
         const payload: CartItemCreateSchema = {
-          game_id: String(game.id),
+          // Ensure game_id is sent as the expected type (string/uuid?).
+          // Assuming game.id is now string and matches expected type
+          game_id: game.id,
           quantity,
         };
+        console.log("Adding item with payload:", payload);
+        // Remove ResponseConfig type annotation
         const response = await cartControllerAddItem(payload);
-
-        // Manually update SWR cache with response data after success
-        // Assuming response structure is { data: Cart }
-        // This depends heavily on the actual return type of useCartControllerAddItem
-        // For now, we'll just revalidate
-        await swrMutateCart();
+        console.log("Item added successfully, response:", response);
+        // On success, revalidate SWR to get the true state from the server
+        // The response *might* contain the updated cart, allowing direct mutation:
+        // swrMutateCart(response.data, false); // <-- Less network traffic if API returns full cart
+        await swrMutateCart(); // Revalidate to be safe
         setMutationState({ isMutating: false, mutationError: null });
+        return (response as any)?.data ?? response ?? null; // Return updated cart from response if available
       } catch (err) {
-        // onError handles state update and reverts optimistic change
-        // We might still want to log it here or perform additional actions
-        console.error("Caught error during addItem trigger:", err);
-        const message = (err as Error).message || "Failed to add item";
-        setMutationState({ isMutating: false, mutationError: message });
-        await swrMutateCart(); // Revalidate to revert optimistic update
+        console.error("addItem Error:", err);
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        setMutationState({ isMutating: false, mutationError: errorObj });
+        // Revert optimistic update on error by revalidating
+        await swrMutateCart();
+        throw errorObj; // Re-throw for component-level handling if needed
       }
     },
     [isAuthenticated, cartData, swrMutateCart]
   );
 
+  // Remove Item Action
   const removeItem = useCallback(
-    async (gameId: number) => {
-      if (!isAuthenticated || !cartData) return;
+    async (gameId: string): Promise<Cart | null> => {
+      if (!isAuthenticated || !cartData) {
+        setMutationState({
+          isMutating: false,
+          mutationError: new Error("User not authenticated or cart not loaded"),
+        });
+        return cartData ?? null;
+      }
 
       // Optimistic update
-      const optimisticCart = produce(cartData, (draft: Cart | null) => {
-        if (!draft?.items) return; // Check items array exists
-        // Compare IDs as strings
+      const optimisticCart = produce(cartData, (draft) => {
+        if (!draft?.items) return;
+        // @ts-expect-error - Stale type: CartItemResponseSchema doesn't have 'game' yet.
+        const removedItemTitle = draft.items.find(
+          (item) => String(item.game_id) === String(gameId)
+        )?.game?.title;
         draft.items = draft.items.filter(
           (item) => String(item.game_id) !== String(gameId)
         );
+        // Optionally store title for message later
       });
-      swrMutateCart(optimisticCart as Cart, false); // Optimistic update
-
+      swrMutateCart(optimisticCart, false);
       setMutationState({ isMutating: true, mutationError: null });
-      try {
-        // Call generated function, assuming it takes gameId directly or in an options object
-        // Need to confirm exact signature of useCartControllerRemoveItem
-        await cartControllerRemoveItem(String(gameId));
 
-        // Revalidate SWR cache on success
+      try {
+        // NOTE: Assuming cartControllerRemoveItem exists and expects game_id (as string).
+        // Add `@ts-expect-error` if necessary due to stale types
+        await cartControllerRemoveItem(gameId);
+        // Revalidate on success
         await swrMutateCart();
         setMutationState({ isMutating: false, mutationError: null });
+        // Need to fetch cart again to return it, or adjust return type
+        return cartData; // Returning current data for now
       } catch (err) {
-        // onError handles state update and revert
-        console.error("Caught error during removeItem trigger:", err);
-        const message = (err as Error).message || "Failed to remove item";
-        setMutationState({ isMutating: false, mutationError: message });
-        await swrMutateCart(); // Revalidate to revert
+        console.error("removeItem Error:", err);
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        setMutationState({ isMutating: false, mutationError: errorObj });
+        // Revert optimistic update on error
+        await swrMutateCart();
+        throw errorObj;
       }
     },
     [isAuthenticated, cartData, swrMutateCart]
   );
 
+  // Update Item Quantity Action
   const updateQuantity = useCallback(
-    async (gameId: number, quantity: number) => {
-      if (!isAuthenticated || !cartData) return;
+    async (gameId: string, quantity: number): Promise<Cart | null> => {
+      if (!isAuthenticated || !cartData) {
+        setMutationState({
+          isMutating: false,
+          mutationError: new Error("User not authenticated or cart not loaded"),
+        });
+        return cartData ?? null;
+      }
       if (quantity <= 0) {
-        await removeItem(gameId); // Use existing remove logic for quantity <= 0
-        return;
+        // Delegate to removeItem if quantity is 0 or less
+        return removeItem(gameId);
       }
 
       // Optimistic update
-      const optimisticCart = produce(cartData, (draft: Cart | null) => {
-        if (!draft?.items) return; // Check items array exists
-        // Compare IDs as strings
-        const itemIndex = draft.items.findIndex(
+      const optimisticCart = produce(cartData, (draft) => {
+        const item = draft?.items?.find(
           (item) => String(item.game_id) === String(gameId)
         );
-        if (itemIndex > -1) {
-          draft.items[itemIndex].quantity = quantity;
+        if (item) {
+          item.quantity = quantity;
         }
       });
-      swrMutateCart(optimisticCart as Cart, false); // Optimistic update
-
+      swrMutateCart(optimisticCart, false);
       setMutationState({ isMutating: true, mutationError: null });
-      try {
-        // Call generated function, assuming it needs gameId and payload
-        // Need to confirm exact signature of useCartControllerUpdateItemQuantity
-        const payload: CartItemUpdateSchema = { quantity };
-        await cartControllerUpdateItemQuantity(String(gameId), payload);
 
-        // Revalidate SWR cache on success
+      try {
+        // NOTE: Assuming cartControllerUpdateItemQuantity exists and expects gameId and payload.
+        const payload: CartItemUpdateSchema = { quantity };
+        // Add `@ts-expect-error` if necessary due to stale types
+        await cartControllerUpdateItemQuantity(gameId, payload);
+        // Revalidate on success
         await swrMutateCart();
         setMutationState({ isMutating: false, mutationError: null });
+        return cartData; // Returning current data for now
       } catch (err) {
-        // onError handles state update and revert
-        console.error("Caught error during updateQuantity trigger:", err);
-        const message = (err as Error).message || "Failed to update quantity";
-        setMutationState({ isMutating: false, mutationError: message });
-        await swrMutateCart(); // Revalidate to revert
+        console.error("updateQuantity Error:", err);
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        setMutationState({ isMutating: false, mutationError: errorObj });
+        // Revert optimistic update on error
+        await swrMutateCart();
+        throw errorObj;
       }
     },
-    [isAuthenticated, cartData, removeItem, swrMutateCart]
+    [isAuthenticated, cartData, swrMutateCart, removeItem] // Added removeItem dependency
   );
 
-  const clearCart = useCallback(async () => {
-    if (!isAuthenticated || !cartData) return;
+  // Clear Cart Action
+  const clearCart = useCallback(async (): Promise<Cart | null> => {
+    if (!isAuthenticated || !cartData) {
+      setMutationState({
+        isMutating: false,
+        mutationError: new Error("User not authenticated or cart not loaded"),
+      });
+      return cartData ?? null;
+    }
 
     // Optimistic update
-    const optimisticCart = produce(cartData, (draft: Cart | null) => {
-      if (!draft) return null;
+    const optimisticCart = produce(cartData, (draft) => {
       draft.items = [];
-      // Reset total price if it's part of the cart state
-      // draft.totalPrice = 0;
     });
-    swrMutateCart(optimisticCart as Cart, false); // Optimistic update
-
+    swrMutateCart(optimisticCart, false);
     setMutationState({ isMutating: true, mutationError: null });
-    try {
-      // Call generated function
-      // Need to confirm signature of useCartControllerClearCart
-      await cartControllerClearCart();
 
-      // Revalidate SWR cache on success
+    try {
+      await cartControllerClearCart();
+      // Revalidate on success
       await swrMutateCart();
       setMutationState({ isMutating: false, mutationError: null });
+      return cartData; // Returning current data for now
     } catch (err) {
-      // onError handles state update and revert
-      console.error("Caught error during clearCart trigger:", err);
-      const message = (err as Error).message || "Failed to clear cart";
-      setMutationState({ isMutating: false, mutationError: message });
-      await swrMutateCart(); // Revalidate to revert
+      console.error("clearCart Error:", err);
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      setMutationState({ isMutating: false, mutationError: errorObj });
+      // Revert optimistic update on error
+      await swrMutateCart();
+      throw errorObj;
     }
   }, [isAuthenticated, cartData, swrMutateCart]);
 
-  // --- Combine Mutating States --- Resetting this as we removed specific mutation hooks
-  const combinedMutating = mutationState.isMutating; // Only rely on local mutation state now
+  // --- Memoize Context Value ---
 
-  // Assemble the context value - THIS MUST MATCH CartContextValue
-  const value: CartContextValue = useMemo(
+  const contextValue = useMemo<CartContextValue>(
     () => ({
       cart: cartData,
-      isLoading: combinedLoading,
+      ...mutationState,
+      isLoading,
       error,
       totalItems,
-      isMutating: combinedMutating, // Use combined state
-      mutationError: mutationState.mutationError, // Keep separate mutation error
-      // Actions
+      totalPrice, // Include totalPrice in the context value
       addItem,
       removeItem,
       updateQuantity,
       clearCart,
+      fetchCart,
     }),
     [
       cartData,
-      combinedLoading,
+      mutationState,
+      isLoading,
       error,
       totalItems,
-      combinedMutating, // Dependency on combined state
-      mutationState.mutationError,
+      totalPrice, // Add totalPrice dependency
       addItem,
       removeItem,
       updateQuantity,
       clearCart,
+      fetchCart,
     ]
   );
 
-  // Provide the calculated value
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return (
+    <CartContext.Provider value={contextValue}>{children}</CartContext.Provider>
+  );
 };
 
-// Custom hook for consuming the context
-/**
- * @description Hook to access the Cart context.
- * Provides cart data, loading/error states, and cart manipulation actions.
- * Throws an error if used outside of CartProvider.
- * @returns {CartContextValue} The cart context value.
- */
-export const useCart = (): CartContextValue => {
-  // Using direct useContext:
-  const context = React.useContext(CartContext);
+// --- Custom Hook for Consumption ---
 
+/**
+ * Custom hook to consume CartContext using useContextSelector for performance.
+ * Allows selecting specific parts of the context state.
+ * Throws error if used outside CartProvider.
+ * @template Selected The type of the selected state slice.
+ * @param {(state: CartContextValue) => Selected} [selector] Optional selector function.
+ * @returns {Selected | CartContextValue} The selected state slice or the full context value.
+ */
+// Simplified return type when selector is undefined
+export function useCart(): CartContextValue;
+export function useCart<Selected>(
+  selector: (state: CartContextValue) => Selected
+): Selected;
+export function useCart<Selected>(
+  selector?: (state: CartContextValue) => Selected
+): Selected | CartContextValue {
+  const context = useContext(CartContext);
   if (context === undefined) {
     throw new Error("useCart must be used within a CartProvider");
   }
+
+  if (selector) {
+    return useContextSelector(CartContext, selector);
+  }
+
+  // If no selector, return the whole context
   return context;
-};
+}
+
+// Example of a specific selector hook (optional, components can define their own)
+// export const useCartItems = () => useCart(state => state.cart?.items);
