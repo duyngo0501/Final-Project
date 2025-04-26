@@ -9,6 +9,12 @@ from sqlmodel import Session
 from .auth import UserIn, get_current_user
 from .db import engine
 
+# Import settings to access ADMIN_EMAIL
+from app.config import settings
+
+# Use rich print for logging
+from rich import print
+
 
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency that yields a SQLAlchemy session.
@@ -18,10 +24,40 @@ def get_db() -> Generator[Session, None, None]:
     Yields:
         Session: The database session for the request context.
     """
-    # Note: This is intentionally duplicated from db.py to make deps.py self-contained
-    # for common dependencies. Consider refactoring if preferred.
-    with Session(engine) as session:
-        yield session
+    print("[blue]deps.py:[/] Creating database session.")
+    session = None  # Initialize session variable
+    session_id = None
+    try:
+        with Session(engine) as session:
+            session_id = id(session)
+            print(f"[blue]deps.py:[/] Session {session_id} created and yielded.")
+            yield session
+            # Explicitly check session state before implicit commit
+            if session.dirty or session.new or session.deleted:
+                print(
+                    f"[yellow]deps.py:[/] Session {session_id} has pending changes (dirty/new/deleted), expecting commit."
+                )
+            else:
+                print(
+                    f"[green]deps.py:[/] Session {session_id} has no pending changes."
+                )
+        # If `with` block exits without error, commit happens implicitly
+        print(
+            f"[green]deps.py:[/] Session {session_id} context manager exited successfully (commit expected)."
+        )
+    except Exception as e:
+        # Use rich print for error, potentially with traceback
+        print(
+            f"[bold red]deps.py: ERROR[/] Exception occurred in session {session_id} context:"
+        )
+        from rich.traceback import Traceback
+
+        print(Traceback(show_locals=True))  # Print rich traceback
+        # Rollback happens implicitly due to exception
+        raise  # Re-raise the exception so FastAPI handles it
+    finally:
+        # Session is automatically closed by the context manager `with Session(...)`
+        print(f"[blue]deps.py:[/] Session {session_id} context manager finished.")
 
 
 # Dependency type hint for database sessions
@@ -32,21 +68,24 @@ CurrentUser = Annotated[UserIn, Depends(get_current_user)]
 
 
 async def get_current_admin_user(current_user: CurrentUser) -> UserIn:
-    """Dependency to get the current user and verify they are an admin.
+    """Dependency to get the current user and verify they are the configured admin.
+
+    Compares the authenticated user's email against the ADMIN_EMAIL setting.
 
     Raises:
-        HTTPException (403): If the user is not an administrator.
+        HTTPException (403): If the user's email does not match ADMIN_EMAIL.
 
     Returns:
-        UserIn: The user object if they are an admin.
+        UserIn: The user object if they are the configured admin.
     """
-    # TODO: Confirm how admin status is stored/checked on the UserIn model.
-    # This assumes an 'is_admin' boolean attribute exists.
-    if not getattr(current_user, "is_admin", False):
+    # Compare email with the ADMIN_EMAIL setting
+    if current_user.email != settings.ADMIN_EMAIL:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges",
         )
+    # Add a print statement for verification during testing
+    print(f"[bold green]Admin access granted for:[/bold green] {current_user.email}")
     return current_user
 
 

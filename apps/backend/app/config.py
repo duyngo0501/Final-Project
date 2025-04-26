@@ -111,6 +111,8 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
 
+    ADMIN_EMAIL: str = Field(default="duycanngo95@gmail.com", env="ADMIN_EMAIL")
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:

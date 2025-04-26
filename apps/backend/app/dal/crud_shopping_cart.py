@@ -24,16 +24,16 @@ class CRUDShoppingCart(
     def get_by_owner(
         self, session: Session, *, owner_id: uuid.UUID
     ) -> ShoppingCartItem | None:
-        """Gets the cart for a specific owner.
+        """Retrieves a shopping cart by its owner's user ID.
 
         Args:
             session: The database session.
-            owner_id: The UUID of the cart owner.
+            owner_id: The UUID of the user who owns the cart.
 
         Returns:
             The ShoppingCartItem object if found, otherwise None.
         """
-        statement = select(self.model).where(self.model.owner_id == owner_id)
+        statement = select(self.model).where(self.model.user_id == owner_id)
         return session.exec(statement).first()
 
     def get_or_create(
@@ -53,14 +53,9 @@ class CRUDShoppingCart(
             # Create the cart - Requires a CartCreateSchema or default values
             # Assuming the model can be created with just owner_id for now
             # Or use self.create from CRUDBase if applicable
-            cart = self.model(owner_id=owner_id)  # Simplified creation
+            cart = self.model(user_id=owner_id)  # Pass owner_id to the user_id field
             session.add(cart)
-            session.commit()
-            session.refresh(cart)
-            # If using CRUDBase create:
-            # cart_in = CartCreateSchema() # Need definition
-            # cart = self.create(session, owner_id=owner_id, obj_in=cart_in)
-        return cart
+            return cart
 
 
 # Instance creation removed

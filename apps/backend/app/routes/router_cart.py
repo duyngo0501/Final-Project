@@ -73,9 +73,9 @@ async def add_item_to_cart(
     return cart_item
 
 
-@router.put("/items/{product_id}", response_model=CartItemResponseSchema)
+@router.put("/items/{game_id}", response_model=CartItemResponseSchema)
 async def update_cart_item_quantity(
-    product_id: uuid.UUID,
+    game_id: uuid.UUID,
     item_in: CartItemUpdateSchema,
     session: SessionDep,
     current_user: CurrentUser,
@@ -85,7 +85,7 @@ async def update_cart_item_quantity(
     Sets the quantity for a specific product in the user's cart.
 
     Args:
-        product_id: The UUID of the product to update.
+        game_id: The UUID of the game (product) to update.
         item_in: The new quantity details.
         session: The database session dependency.
         current_user: The authenticated user dependency.
@@ -102,23 +102,23 @@ async def update_cart_item_quantity(
         raise HTTPException(status_code=404, detail="Cart not found")
 
     updated_item = cart_entry_item.update_item_quantity(
-        session, cart_id=user_cart.id, product_id=product_id, item_in=item_in
+        session, cart_id=user_cart.id, game_id=game_id, item_in=item_in
     )
     if not updated_item:
         raise HTTPException(status_code=404, detail="Item not found in cart")
     return updated_item
 
 
-@router.delete("/items/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/items/{game_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_item_from_cart(
-    product_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
+    game_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
 ) -> None:
     """Remove an item from the shopping cart.
 
     Deletes a specific product from the user's cart.
 
     Args:
-        product_id: The UUID of the product to remove.
+        game_id: The UUID of the game (product) to remove.
         session: The database session dependency.
         current_user: The authenticated user dependency.
 
@@ -135,7 +135,7 @@ async def remove_item_from_cart(
         raise HTTPException(status_code=404, detail="Cart not found")
 
     removed_item = cart_entry_item.remove_item(
-        session, cart_id=user_cart.id, product_id=product_id
+        session, cart_id=user_cart.id, game_id=game_id
     )
     if not removed_item:
         raise HTTPException(status_code=404, detail="Item not found in cart")

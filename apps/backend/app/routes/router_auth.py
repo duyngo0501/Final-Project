@@ -4,6 +4,7 @@
 import logging
 import traceback
 from typing import Annotated
+import uuid  # Ensure uuid is imported
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -114,16 +115,14 @@ async def register_user(
         sign_up_resp = await super_client.auth.sign_up(
             {"email": user_in.email, "password": user_in.password}
         )
-        # TODO: Check sign_up_resp for success/failure details if needed
-        # Supabase might auto-verify or send confirmation emails depending on settings.
-        # The response contains the user object.
         if not sign_up_resp or not sign_up_resp.user:
-            # Handle cases where sign_up might not raise AuthApiError but doesn't return a user
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Supabase sign-up succeeded but no user data was returned.",
             )
-        supabase_user_id = sign_up_resp.user.id  # Get the ID assigned by Supabase
+        # --- Get Supabase User ID --- #
+        supabase_user_id = sign_up_resp.user.id
+        # -------------------------- #
 
     except AuthApiError as e:
         # Handle specific Supabase errors (e.g., email exists, weak password)
@@ -164,16 +163,13 @@ async def register_user(
         # Let's just return the existing local user for now, assuming it should match.
         # This implicitly assumes the first registration attempt failed mid-way.
         # A better approach might involve linking IDs or a more robust sync strategy.
-        return (
-            local_user  # Return existing local user (needs UserReadSchema conversion)
-        )
+        # Consider updating the local user with the supabase_user_id if it doesn't match?
+        return local_user  # Needs UserReadSchema conversion?
 
     try:
-        # Create user locally using the same password (hashed by crud_user.create)
-        # We pass the full user_in object which now includes full_name if provided
-        # We are NOT currently linking the supabase_user_id to the local record.
-        # Consider adding a supabase_user_id field to UserItem model and setting it here.
-        created_user = crud_user.create(db=db, obj_in=user_in)
+        # --- Pass Supabase ID to local creation --- #
+        created_user = crud_user.create(db=db, obj_in=user_in, id=supabase_user_id)
+        # ------------------------------------------ #
         return created_user
     except Exception as e:
         # Catch errors during local DB creation

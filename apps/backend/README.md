@@ -1,3 +1,4 @@
+
 # FastAPI Supbase Template
 
 ## Environment
@@ -69,3 +70,10 @@ docker run --network host \
   -it atticux/fastapi_supabase_template:latest \
   bash -c "sh scripts/pre-start.sh && sh scripts/tests-start.sh"
 ```
+
+
+# Admin account 
+Email: duycanngo95@gmail.com  Password: duyngo123
+
+# Guest account
+Email: duynhgcs200255@fpt.edu.vn  Password: duyngo0501

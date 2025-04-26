@@ -9,6 +9,7 @@ import logging
 from collections.abc import AsyncGenerator
 from typing import Any
 
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.concurrency import asynccontextmanager

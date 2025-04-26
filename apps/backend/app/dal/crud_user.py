@@ -1,3 +1,4 @@
+import uuid  # Import uuid module
 from typing import Any
 
 from sqlmodel import Session, select
@@ -37,28 +38,37 @@ class CRUDUser:
         statement = select(UserItem).where(UserItem.email == email)
         return db.exec(statement).first()
 
-    def create(self, db: Session, *, obj_in: UserCreateSchema) -> UserItem:
-        """
-        Create a new user in the database.
+    def create(
+        self, db: Session, *, obj_in: UserCreateSchema, id: uuid.UUID | None = None
+    ) -> UserItem:
+        """Create a new user in the database.
 
-        Hashes the password before saving.
+        Hashes the password before saving. Allows specifying an ID, otherwise
+        the model's default factory is used.
 
         Args:
             db (Session): The database session.
             obj_in (UserCreateSchema): The user data to create.
+            id (uuid.UUID | None, optional): The specific ID to assign. Defaults to None.
 
         Returns:
             UserItem: The newly created user object.
         """
-        db_obj = UserItem(
-            email=obj_in.email,
-            hashed_password=get_password_hash(obj_in.password),
-            # is_superuser can be set based on logic or another field if needed
-            # full_name, avatar_url could be added later or during registration
-        )
+        create_data = {
+            "email": obj_in.email,
+            "hashed_password": get_password_hash(obj_in.password),
+            "full_name": obj_in.full_name,  # Include full_name
+            # Include other fields from UserCreateSchema or defaults as needed
+            "is_active": True,  # Assuming default
+            "is_superuser": False,  # Assuming default
+            "is_admin": False,  # Assuming default
+        }
+        if id:
+            create_data["id"] = id  # Use provided ID if available
+
+        db_obj = UserItem(**create_data)
+
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
         return db_obj
 
     def update(
@@ -96,8 +106,6 @@ class CRUDUser:
             setattr(db_obj, field, value)
 
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
         return db_obj
 
     def is_superuser(self, user: UserItem) -> bool:

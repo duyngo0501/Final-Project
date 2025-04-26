@@ -17,11 +17,11 @@ class CartItemBaseSchema(BaseModel):
     Contains fields shared across creation and response schemas.
 
     Attributes:
-        product_id: The unique identifier (UUID) of the game product.
+        game_id: The unique identifier (UUID) of the game product.
         quantity: The number of units of the product (must be greater than 0).
     """
 
-    product_id: uuid.UUID = Field(
+    game_id: uuid.UUID = Field(
         ..., description="The UUID of the product (game) in the cart"
     )
     quantity: int = Field(
@@ -32,7 +32,7 @@ class CartItemBaseSchema(BaseModel):
 class CartItemCreateSchema(CartItemBaseSchema):
     """Schema for data needed when adding a new item to the cart.
 
-    Inherits `product_id` and `quantity` from the base schema.
+    Inherits `game_id` and `quantity` from the base schema.
     """
 
     pass  # No additional fields needed beyond the base for creation
@@ -59,7 +59,7 @@ class CartItemResponseSchema(CartItemBaseSchema):
     Attributes:
         id: The unique identifier (UUID) of this specific cart entry.
         cart_id: The unique identifier (UUID) of the cart this item belongs to.
-        product_id: (Inherited) The UUID of the game product.
+        game_id: (Inherited) The UUID of the game product.
         quantity: (Inherited) The number of units.
     """
 
@@ -108,13 +108,13 @@ class CartResponseSchema(CartBaseSchema):
 
     Attributes:
         id: The unique identifier (UUID) of the shopping cart.
-        owner_id: The unique identifier (UUID) of the user who owns the cart.
+        user_id: The unique identifier (UUID) of the user who owns the cart.
         items: A list of CartItemResponseSchema objects representing the items
                currently in the cart.
     """
 
     id: uuid.UUID
-    owner_id: uuid.UUID
+    user_id: uuid.UUID
     items: list[CartItemResponseSchema] = []  # Default to empty list
 
     class Config:
