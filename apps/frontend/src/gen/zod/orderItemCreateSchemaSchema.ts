@@ -6,7 +6,7 @@
 import { z } from 'zod'
 
 export const orderItemCreateSchemaSchema = z.object({
-  game_id: z.number().int(),
+  game_id: z.string(),
   quantity: z.number().int(),
   price_at_purchase: z.number(),
 })

@@ -6,13 +6,14 @@
 import { z } from 'zod'
 
 /**
- * @description Pydantic schema for creating a new user.\n\nRequires email and password.\n\nAttributes:\n    email (EmailStr): The user\'s email address.\n    password (str): The user\'s chosen password.
+ * @description Schema for creating a new user.\n\nAttributes:\n    email (EmailStr): The user\'s email address.\n    password (str): The user\'s chosen password (min 8 chars).\n    full_name (str | None): Optional full name.
  */
 export const userCreateSchemaSchema = z
   .object({
     email: z.string().email(),
     password: z.string().min(8),
+    full_name: z.union([z.string(), z.null()]).optional(),
   })
   .describe(
-    "Pydantic schema for creating a new user.\n\nRequires email and password.\n\nAttributes:\n    email (EmailStr): The user's email address.\n    password (str): The user's chosen password.",
+    "Schema for creating a new user.\n\nAttributes:\n    email (EmailStr): The user's email address.\n    password (str): The user's chosen password (min 8 chars).\n    full_name (str | None): Optional full name.",
   )

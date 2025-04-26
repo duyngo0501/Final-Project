@@ -11,6 +11,9 @@ import { z } from 'zod'
 export const userReadSchemaSchema = z
   .object({
     email: z.union([z.string().email(), z.null()]).optional(),
-    id: z.string(),
+    is_active: z.boolean().default(true),
+    is_superuser: z.boolean().default(false),
+    full_name: z.union([z.string(), z.null()]).optional(),
+    id: z.string().uuid(),
   })
   .describe('Pydantic schema for returning user data to the client.\n\nInherits from UserInDBBaseSchema.')

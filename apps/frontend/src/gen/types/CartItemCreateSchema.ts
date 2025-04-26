@@ -4,14 +4,14 @@
  */
 
 /**
- * @description Schema for data needed when adding a new item to the cart.\n\nInherits `product_id` and `quantity` from the base schema.
+ * @description Schema for data needed when adding a new item to the cart.\n\nInherits `game_id` and `quantity` from the base schema.
  */
 export type CartItemCreateSchema = {
   /**
    * @description The UUID of the product (game) in the cart
    * @type string, uuid
    */
-  product_id: string
+  game_id: string
   /**
    * @description Number of units of the product (must be positive)
    * @type integer

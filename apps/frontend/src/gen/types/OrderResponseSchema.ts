@@ -7,9 +7,9 @@ import type { OrderItemResponseSchema } from './OrderItemResponseSchema.ts'
 
 export type OrderResponseSchema = {
   /**
-   * @type integer
+   * @type string
    */
-  id: number
+  id: string
   /**
    * @type string, email
    */

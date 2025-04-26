@@ -6,8 +6,8 @@
 import { z } from 'zod'
 
 export const orderItemResponseSchemaSchema = z.object({
-  id: z.number().int(),
-  game_id: z.number().int(),
+  id: z.string(),
+  game_id: z.string(),
   quantity: z.number().int(),
   price_at_purchase: z.number(),
 })

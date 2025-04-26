@@ -9,9 +9,9 @@ import type { PlatformInfo } from './PlatformInfo.ts'
 
 export type Product = {
   /**
-   * @type integer
+   * @type string
    */
-  id: number
+  id: string
   /**
    * @type string
    */

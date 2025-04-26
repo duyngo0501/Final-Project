@@ -4,7 +4,7 @@
  */
 
 /**
- * @description Pydantic schema for creating a new user.\n\nRequires email and password.\n\nAttributes:\n    email (EmailStr): The user\'s email address.\n    password (str): The user\'s chosen password.
+ * @description Schema for creating a new user.\n\nAttributes:\n    email (EmailStr): The user\'s email address.\n    password (str): The user\'s chosen password (min 8 chars).\n    full_name (str | None): Optional full name.
  */
 export type UserCreateSchema = {
   /**
@@ -16,4 +16,5 @@ export type UserCreateSchema = {
    * @type string
    */
   password: string
+  full_name?: string | null
 }

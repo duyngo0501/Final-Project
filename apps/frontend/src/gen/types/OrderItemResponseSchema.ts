@@ -5,13 +5,13 @@
 
 export type OrderItemResponseSchema = {
   /**
-   * @type integer
+   * @type string
    */
-  id: number
+  id: string
   /**
-   * @type integer
+   * @type string
    */
-  game_id: number
+  game_id: string
   /**
    * @type integer
    */

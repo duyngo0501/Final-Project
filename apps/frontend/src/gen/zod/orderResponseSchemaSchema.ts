@@ -7,7 +7,7 @@ import { orderItemResponseSchemaSchema } from './orderItemResponseSchemaSchema.t
 import { z } from 'zod'
 
 export const orderResponseSchemaSchema = z.object({
-  id: z.number().int(),
+  id: z.string(),
   customer_email: z.string().email(),
   customer_phone: z.union([z.string(), z.null()]),
   total_amount: z.number(),

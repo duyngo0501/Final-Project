@@ -7,22 +7,22 @@ import { cartItemResponseSchemaSchema } from './cartItemResponseSchemaSchema.ts'
 import { z } from 'zod'
 
 /**
- * @description Schema for representing a shopping cart in API responses.\n\nIncludes the cart\'s ID, owner\'s ID, and a list of its items.\n\nAttributes:\n    id: The unique identifier (UUID) of the shopping cart.\n    owner_id: The unique identifier (UUID) of the user who owns the cart.\n    items: A list of CartItemResponseSchema objects representing the items\n           currently in the cart.
+ * @description Schema for representing a shopping cart in API responses.\n\nIncludes the cart\'s ID, owner\'s ID, and a list of its items.\n\nAttributes:\n    id: The unique identifier (UUID) of the shopping cart.\n    user_id: The unique identifier (UUID) of the user who owns the cart.\n    items: A list of CartItemResponseSchema objects representing the items\n           currently in the cart.
  */
 export const cartResponseSchemaSchema = z
   .object({
     id: z.string().uuid(),
-    owner_id: z.string().uuid(),
+    user_id: z.string().uuid(),
     items: z
       .array(
         z
           .lazy(() => cartItemResponseSchemaSchema)
           .describe(
-            'Schema for representing a cart item in API responses.\n\nIncludes the unique ID of the cart item entry itself, in addition\nto base properties.\n\nAttributes:\n    id: The unique identifier (UUID) of this specific cart entry.\n    cart_id: The unique identifier (UUID) of the cart this item belongs to.\n    product_id: (Inherited) The UUID of the game product.\n    quantity: (Inherited) The number of units.',
+            'Schema for representing a cart item in API responses.\n\nIncludes the unique ID of the cart item entry itself, in addition\nto base properties.\n\nAttributes:\n    id: The unique identifier (UUID) of this specific cart entry.\n    cart_id: The unique identifier (UUID) of the cart this item belongs to.\n    game_id: (Inherited) The UUID of the game product.\n    quantity: (Inherited) The number of units.',
           ),
       )
       .optional(),
   })
   .describe(
-    "Schema for representing a shopping cart in API responses.\n\nIncludes the cart's ID, owner's ID, and a list of its items.\n\nAttributes:\n    id: The unique identifier (UUID) of the shopping cart.\n    owner_id: The unique identifier (UUID) of the user who owns the cart.\n    items: A list of CartItemResponseSchema objects representing the items\n           currently in the cart.",
+    "Schema for representing a shopping cart in API responses.\n\nIncludes the cart's ID, owner's ID, and a list of its items.\n\nAttributes:\n    id: The unique identifier (UUID) of the shopping cart.\n    user_id: The unique identifier (UUID) of the user who owns the cart.\n    items: A list of CartItemResponseSchema objects representing the items\n           currently in the cart.",
   )

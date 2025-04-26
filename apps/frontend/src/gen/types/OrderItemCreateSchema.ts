@@ -5,9 +5,9 @@
 
 export type OrderItemCreateSchema = {
   /**
-   * @type integer
+   * @type string
    */
-  game_id: number
+  game_id: string
   /**
    * @type integer
    */

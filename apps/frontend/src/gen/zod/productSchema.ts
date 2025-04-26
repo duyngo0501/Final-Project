@@ -9,7 +9,7 @@ import { platformInfoSchema } from './platformInfoSchema.ts'
 import { z } from 'zod'
 
 export const productSchema = z.object({
-  id: z.number().int(),
+  id: z.string(),
   slug: z.string(),
   name: z.string(),
   released: z.union([z.string().date(), z.null()]).optional(),

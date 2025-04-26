@@ -6,7 +6,7 @@
 import type { CartItemResponseSchema } from './CartItemResponseSchema.ts'
 
 /**
- * @description Schema for representing a shopping cart in API responses.\n\nIncludes the cart\'s ID, owner\'s ID, and a list of its items.\n\nAttributes:\n    id: The unique identifier (UUID) of the shopping cart.\n    owner_id: The unique identifier (UUID) of the user who owns the cart.\n    items: A list of CartItemResponseSchema objects representing the items\n           currently in the cart.
+ * @description Schema for representing a shopping cart in API responses.\n\nIncludes the cart\'s ID, owner\'s ID, and a list of its items.\n\nAttributes:\n    id: The unique identifier (UUID) of the shopping cart.\n    user_id: The unique identifier (UUID) of the user who owns the cart.\n    items: A list of CartItemResponseSchema objects representing the items\n           currently in the cart.
  */
 export type CartResponseSchema = {
   /**
@@ -16,7 +16,7 @@ export type CartResponseSchema = {
   /**
    * @type string, uuid
    */
-  owner_id: string
+  user_id: string
   /**
    * @type array | undefined
    */

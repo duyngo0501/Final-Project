@@ -4,14 +4,14 @@
  */
 
 /**
- * @description Schema for representing a cart item in API responses.\n\nIncludes the unique ID of the cart item entry itself, in addition\nto base properties.\n\nAttributes:\n    id: The unique identifier (UUID) of this specific cart entry.\n    cart_id: The unique identifier (UUID) of the cart this item belongs to.\n    product_id: (Inherited) The UUID of the game product.\n    quantity: (Inherited) The number of units.
+ * @description Schema for representing a cart item in API responses.\n\nIncludes the unique ID of the cart item entry itself, in addition\nto base properties.\n\nAttributes:\n    id: The unique identifier (UUID) of this specific cart entry.\n    cart_id: The unique identifier (UUID) of the cart this item belongs to.\n    game_id: (Inherited) The UUID of the game product.\n    quantity: (Inherited) The number of units.
  */
 export type CartItemResponseSchema = {
   /**
    * @description The UUID of the product (game) in the cart
    * @type string, uuid
    */
-  product_id: string
+  game_id: string
   /**
    * @description Number of units of the product (must be positive)
    * @type integer
