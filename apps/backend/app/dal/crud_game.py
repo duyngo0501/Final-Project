@@ -1,7 +1,7 @@
 """CRUD operations for the unified Game model (RAWG and custom)."""
 
 import uuid
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Generic, Type, TypeVar
 
 from slugify import slugify  # Import slugify
 from sqlmodel import Session, select, func  # Import func for count

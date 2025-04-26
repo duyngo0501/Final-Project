@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, validator
 
+# Placeholder for Promotion schemas
+
 
 # Use the same Enum as in the model
 class DiscountType(str, enum.Enum):

@@ -17,6 +17,7 @@
     "@ant-design/pro-layout": "^7.22.4",
     "@anthropic-ai/sdk": "^0.39.0",
     "@heroicons/react": "^2.1.1",
+    "@supabase/supabase-js": "^2.49.4",
     "@tanstack/react-query": "^5.74.4",
     "@tanstack/react-query-devtools": "^5.74.4",
     "antd": "^5.24.7",

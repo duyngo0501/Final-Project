@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Generic, Type, TypeVar
 
 from sqlmodel import Session, select
 

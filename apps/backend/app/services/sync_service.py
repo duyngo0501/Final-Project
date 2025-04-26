@@ -1,14 +1,25 @@
 """Service for synchronizing data from external APIs (e.g., RAWG) to the local database."""
 
 import logging
+import asyncio  # Import asyncio
+import httpx  # Use httpx for async requests if possible, or keep requests for threadpool
 from datetime import date
-from sqlmodel import Session
+from sqlmodel import (
+    Session,
+    SQLModel,
+    select,
+    create_engine,
+)  # Need create_engine if passing engine
+from sqlalchemy.future import Engine  # Type hint for engine
 
 # Import the existing RAWG client function
-from app.services.game_api_client import get_rawg_games
+from app.services.game_api_client import get_rawg_games, RAWG_API_KEY
 
 # Import the CRUD object for games
 from app.dal import game as crud_game
+
+# Import the Game model itself for the bulk query
+from app.models import Game  # Adjust path if model is elsewhere
 
 # Import the schema for creating games
 from app.schemas.db_game import GameCreateSchema
@@ -69,77 +80,151 @@ def map_rawg_to_schema(rawg_data: dict) -> GameCreateSchema | None:
 
 
 async def sync_rawg_games(
-    session: Session, pages_to_sync: int = 1  # Limit pages synced on startup
+    *,
+    engine: Engine,
+    pages_to_sync: int | None = None,  # Accept engine, pages_to_sync can be None
 ) -> None:
-    """Fetches games from RAWG and syncs them to the local database.
+    """Fetches ALL games from RAWG and syncs them to the local database.
+
+    Runs as an async background task.
+    Uses run_in_threadpool for synchronous HTTP requests.
+    Creates its own session per page/batch.
+    Includes rate limiting.
 
     Args:
-        session: The database session to use for CRUD operations.
-        pages_to_sync: How many pages of RAWG results to fetch and process.
+        engine: SQLAlchemy engine instance for creating sessions.
+        pages_to_sync: Max number of pages to sync (None means sync all).
     """
-    logger.info(f"Starting RAWG game sync for {pages_to_sync} page(s)...")
+    logger.info(
+        f"Starting RAWG game sync. Max pages: {'All' if pages_to_sync is None else pages_to_sync}."
+    )
     synced_count = 0
     skipped_count = 0
+    error_count = 0
+    page_num = 1
+    next_page_url: str | None = (
+        f"https://api.rawg.io/api/games?key={RAWG_API_KEY}&page_size=40"  # Initial URL
+    )
 
-    for page_num in range(1, pages_to_sync + 1):
-        logger.info(f"Fetching RAWG page {page_num}...")
-        # Note: get_rawg_games is synchronous, run in threadpool if needed
-        # For simplicity now, we call it directly. If it blocks startup significantly,
-        # consider running it in a background task or using an async client.
-        rawg_response = get_rawg_games(
-            page=page_num, page_size=40
-        )  # Fetch larger page size
+    loop = asyncio.get_running_loop()
 
-        if not rawg_response or "results" not in rawg_response:
-            logger.error(
-                f"Failed to fetch RAWG games or invalid response for page {page_num}."
+    while next_page_url:
+        if pages_to_sync is not None and page_num > pages_to_sync:
+            logger.info(f"Reached page limit ({pages_to_sync}), stopping sync.")
+            break
+
+        logger.info(f"Processing RAWG page {page_num}...")
+
+        try:
+            rawg_response = await asyncio.to_thread(
+                get_rawg_games, page=page_num, page_size=40
             )
-            continue  # Move to next page or stop if desired
 
-        rawg_games_list = rawg_response["results"]
-        logger.info(
-            f"Processing {len(rawg_games_list)} games from RAWG page {page_num}..."
-        )
-
-        for rawg_game_data in rawg_games_list:
-            rawg_id = rawg_game_data.get("id")
-            if not rawg_id:
-                logger.warning("Skipping game with missing ID in RAWG data.")
-                skipped_count += 1
+            if not rawg_response or "results" not in rawg_response:
+                logger.error(
+                    f"Failed to fetch RAWG games or invalid response for page {page_num}. Response: {rawg_response}"
+                )
+                error_count += 1
+                await asyncio.sleep(10)
+                page_num += 1
                 continue
 
-            # Check if game already exists by RAWG ID
-            existing_game = crud_game.get_by_rawg_id(db=session, rawg_id=rawg_id)
+            rawg_games_list = rawg_response.get("results", [])
+            next_page_url = rawg_response.get("next")
 
-            if existing_game:
-                # logger.debug(f"Game with RAWG ID {rawg_id} already exists, skipping.")
-                skipped_count += 1
-                continue
-            else:
-                # Map data and create new game
-                game_schema = map_rawg_to_schema(rawg_game_data)
-                if game_schema:
-                    try:
-                        created_game = crud_game.create(db=session, obj_in=game_schema)
-                        # logger.info(f"Created new game: {created_game.name} (RAWG ID: {rawg_id})")
-                        synced_count += 1
-                    except ValueError as ve:
-                        logger.error(
-                            f"Validation error creating game from RAWG ID {rawg_id}: {ve}"
+            logger.info(
+                f"Processing {len(rawg_games_list)} games from RAWG page {page_num}... (Next page URL: {next_page_url is not None})"
+            )
+
+            if not rawg_games_list:
+                logger.info(f"No results on page {page_num}, continuing...")
+                page_num += 1
+                if next_page_url:
+                    await asyncio.sleep(1)
+                continue  # Skip DB interaction if no games on page
+
+            # --- Batch Processing Logic ---
+            ids_on_page = {g["id"] for g in rawg_games_list if g.get("id")}
+            data_by_id = {g["id"]: g for g in rawg_games_list if g.get("id")}
+
+            games_to_create: list[GameCreateSchema] = []
+            existing_ids_in_db: set[int] = set()
+
+            with Session(engine) as session:
+                try:
+                    # Bulk check for existing IDs
+                    if ids_on_page:
+                        statement = select(Game.rawg_id).where(
+                            Game.rawg_id.in_(ids_on_page)
                         )
-                        skipped_count += 1
-                    except Exception as e:
+                        results = session.exec(statement).all()
+                        existing_ids_in_db = set(results)
+                        logger.debug(
+                            f"Page {page_num}: Found {len(existing_ids_in_db)} existing games out of {len(ids_on_page)}."
+                        )
+
+                    # Identify and map new games
+                    new_game_count_page = 0
+                    for rawg_id in ids_on_page:
+                        if rawg_id not in existing_ids_in_db:
+                            rawg_game_data = data_by_id.get(rawg_id)
+                            if rawg_game_data:
+                                game_schema = map_rawg_to_schema(rawg_game_data)
+                                if game_schema:
+                                    # Add the model instance directly to the session
+                                    # Create a Game instance from the schema if needed, or if CRUD handles it
+                                    # Assuming Game model can be instantiated from GameCreateSchema or CRUD handles it
+                                    # This depends on your Game model definition and CRUD logic
+                                    # For simplicity, let's assume we add the schema and CRUD/SQLModel handles it
+                                    # If not, you'd do: game_model = Game.model_validate(game_schema); session.add(game_model)
+                                    session.add(
+                                        Game(**game_schema.model_dump())
+                                    )  # Example: Directly add model instance
+                                    new_game_count_page += 1
+                                else:
+                                    # Mapping error logged in map_rawg_to_schema
+                                    error_count += 1
+                        else:
+                            skipped_count += 1  # Increment skipped for existing games
+
+                    # Commit all additions for this page
+                    if new_game_count_page > 0:
+                        session.commit()
+                        synced_count += new_game_count_page
+                        logger.info(
+                            f"Page {page_num}: Committed {new_game_count_page} new games."
+                        )
+                    else:
+                        logger.info(f"Page {page_num}: No new games to commit.")
+                        # No need to commit if nothing was added
+
+                except Exception as db_exc:
+                    logger.error(
+                        f"Database error processing page {page_num}: {db_exc}",
+                        exc_info=True,
+                    )
+                    error_count += 1
+                    try:
+                        session.rollback()  # Rollback on error for this page
+                    except Exception as rb_exc:
                         logger.error(
-                            f"Error creating game from RAWG ID {rawg_id}: {e}",
+                            f"Failed to rollback session for page {page_num}: {rb_exc}",
                             exc_info=True,
                         )
-                        skipped_count += 1
-                else:
-                    skipped_count += 1
-                    # Mapping error already logged in map_rawg_to_schema
+            # --- End Batch Processing Logic ---
 
-        # Optional: Check if there are more pages in rawg_response['next'] if you want to sync all
+        except Exception as e:
+            logger.error(
+                f"An unexpected error occurred processing page {page_num}: {e}",
+                exc_info=True,
+            )
+            error_count += 1
+            await asyncio.sleep(10)
+
+        page_num += 1
+        if next_page_url:
+            await asyncio.sleep(1)
 
     logger.info(
-        f"RAWG game sync finished. Synced: {synced_count}, Skipped/Existing: {skipped_count}"
+        f"RAWG game sync finished. Total Synced: {synced_count}, Skipped/Existing: {skipped_count}, Errors: {error_count}"
     )

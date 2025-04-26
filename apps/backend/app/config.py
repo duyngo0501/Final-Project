@@ -5,6 +5,7 @@ Handles loading settings from environment variables or .env files using Pydantic
 
 import secrets
 import warnings
+import os
 from pathlib import Path  # Import Path
 from typing import Annotated, Any, Literal
 
@@ -62,15 +63,13 @@ class Settings(BaseSettings):
         POSTGRES_DB: str
         POSTGRES_USER: str
         POSTGRES_PASSWORD: str
-        FIRST_SUPERUSER: Email/username for the initial superuser.
-        FIRST_SUPERUSER_PASSWORD: Password for the initial superuser.
     """
 
     # Pydantic settings configuration
     model_config = SettingsConfigDict(
         # Calculate path relative to this config file
         # Assumes .env is 3 levels up (config.py -> core -> app -> backend)
-        env_file="../../../.env",
+        env_file=".env",
         env_ignore_empty=True,
         extra="ignore",
     )
@@ -123,10 +122,6 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
-    # Initial Superuser Configuration
-    FIRST_SUPERUSER: str
-    FIRST_SUPERUSER_PASSWORD: str
-
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         """Checks if a sensitive setting still uses the default placeholder.
 
@@ -149,21 +144,6 @@ class Settings(BaseSettings):
                 warnings.warn(message, stacklevel=1)
             else:
                 raise ValueError(message)
-
-    @model_validator(mode="after")
-    def _enforce_non_default_secrets(self) -> Self:
-        """Validates critical secrets are not using default placeholders.
-
-        This Pydantic validator runs after model initialization.
-
-        Returns:
-            The validated Settings instance.
-        """
-        self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
-        self._check_default_secret(
-            "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
-        )
-        return self
 
 
 # Global instance of the settings, loaded on import.

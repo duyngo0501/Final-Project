@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
-    "dev": "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "dev": "source .venv/bin/activate && uv sync && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
     "gen:postman": "cd backend && uv run fastapi-openapi-to-postman http://127.0.0.1:8000/openapi.json > ../postman_collection.json",
     "docker:build": "docker build -t backend-app .",
     "docker:run": "docker run -d --name backend-container -p 8000:8000 backend-app",

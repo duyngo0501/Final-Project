@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Sequence
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from sqlmodel import Session, SQLModel, select
 

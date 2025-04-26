@@ -7,7 +7,7 @@ API request/response models for user operations.
 from typing import Any
 
 from gotrue import User, UserAttributes  # type: ignore
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 # Shared properties

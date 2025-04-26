@@ -26,7 +26,8 @@ from app.core.middleware import TracebackMiddleware
 from app.utils import custom_generate_unique_id
 from app.core.db import engine
 from app.services.sync_service import sync_rawg_games
-from sqlmodel import Session
+import asyncio
+from contextlib import asynccontextmanager
 
 # Remove individual router imports
 # from app.api.routes import (
@@ -53,45 +54,38 @@ print("-----------------------\n")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa ARG001
-    """life span events"""
-    # --- Database Session for Startup Tasks --- #
-    # Use a context manager for the session
-    session: Session | None = None
+    """life span events, including background RAWG sync."""
+    # --- Omit Database Migration --- #
+    logger.info("Skipping automatic database migrations on startup.")
+    # alembic_cfg = Config("alembic.ini")
+    # alembic_cfg.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
+    # migration_success = False # Remove migration success check
+    # try:
+    #     command.upgrade(alembic_cfg, "head")
+    #     logger.info("Database migrations completed successfully.")
+    #     migration_success = True
+    # except Exception as e:
+    #     logger.error(f"Database migration failed: {e}", exc_info=True)
+
+    # --- Background RAWG Sync Task --- #
+    bg_task = None
+    # Start the task unconditionally now that migration is omitted
+    logger.info("Creating background task for RAWG sync...")
+    # Use asyncio.create_task to run in background
+    bg_task = asyncio.create_task(sync_rawg_games(engine=engine, pages_to_sync=None))
+    # await sync_rawg_games(engine=engine, pages_to_sync=None) # This would block startup
+    logger.info("Background RAWG sync task created.")
+    # else:
+
     try:
-        with Session(engine) as session:
-            logger.info("lifespan start")
-            # --- Run Alembic migrations on startup --- #
-            logger.info("Running database migrations...")
-            alembic_cfg = Config("alembic.ini")
-            alembic_cfg.set_main_option(
-                "sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI
-            )
-            try:
-                command.upgrade(alembic_cfg, "head")
-                logger.info("Database migrations completed successfully.")
-
-                # --- Run RAWG Sync (after successful migration) --- #
-                logger.info("Starting RAWG sync...")
-                logger.info("Attempting to call sync_rawg_games function...")
-                try:
-                    # WARNING: Calling synchronous function in async context
-                    # Consider using run_in_threadpool or making client async
-                    await sync_rawg_games(
-                        session=session, pages_to_sync=1
-                    )  # Use the session
-                    logger.info("RAWG sync attempted.")
-                except Exception as sync_exc:
-                    logger.error(f"Error during RAWG sync: {sync_exc}", exc_info=True)
-                # -------------------------------------------------- #
-
-            except Exception as e:
-                logger.error(f"Database migration failed: {e}", exc_info=True)
-            # ------------------------------------------ #
-            # logger.info("Skipping migrations and sync during this startup for debugging.") # Remove info message
-            yield  # Application runs here
+        yield  # Application runs here
     finally:
         logger.info("lifespan exit")
-        # Session is automatically closed by the 'with' statement
+        if bg_task and not bg_task.done():
+            logger.warning(
+                "RAWG sync task may still be running in the background on shutdown."
+            )
+            # Choose cancellation or a longer wait based on requirements
 
 
 # init FastAPI with lifespan
@@ -136,5 +130,9 @@ def timestamp_log_config(uvicorn_log_config: dict[str, Any]) -> dict[str, Any]:
 
 if __name__ == "__main__":
     uvicorn.run(
-        app, host="0.0.0.0", port=8000, log_config=timestamp_log_config(LOGGING_CONFIG)
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_config=timestamp_log_config(LOGGING_CONFIG),
+        log_level="debug",
     )

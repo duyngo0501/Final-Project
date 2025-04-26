@@ -144,10 +144,6 @@ const ForgotPasswordPage: React.FC = () => {
               Send Reset Link
             </Button>
           </div>
-
-          <div style={{ textAlign: "center" }}>
-            <Link to="/login">Back to Login</Link>
-          </div>
         </form>
       </Card>
     </div>

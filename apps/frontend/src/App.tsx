@@ -5,8 +5,6 @@ import HomePage from "@/pages/HomePage";
 import GamesPage from "@/pages/GamesPage";
 import GameDetailPage from "@/pages/GameDetailPage";
 import Cart from "@/pages/Cart";
-import LoginPage from "@/pages/LoginPage";
-import RegisterPage from "@/pages/RegisterPage";
 import ProfilePage from "@/pages/ProfilePage";
 import BlogPage from "@/pages/BlogPage";
 import BlogPostDetailPage from "@/pages/BlogPostDetailPage";
@@ -52,8 +50,6 @@ function App(): JSX.Element {
                   </PrivateRoute>
                 }
               />
-              <Route path="login" element={<LoginPage />} />
-              <Route path="register" element={<RegisterPage />} />
             </Route>
 
             <Route element={<AdminProtectedRoute />}>

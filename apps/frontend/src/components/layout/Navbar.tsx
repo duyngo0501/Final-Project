@@ -36,7 +36,8 @@ const Navbar: React.FC = () => {
   const cartContext = useContext(CartContext);
   const totalItems = cartContext?.totalItems ?? 0;
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
-  const logout = useAuth((state) => state.logout);
+  const signOut = useAuth((state) => state.signOut);
+  const signInWithProvider = useAuth((state) => state.signInWithProvider);
   const navigate = useNavigate();
   const location = useLocation(); // Get current location for active link
 
@@ -47,12 +48,19 @@ const Navbar: React.FC = () => {
   };
 
   const handleLogout = () => {
-    if (logout) {
-      logout();
-      navigate("/");
+    if (signOut) {
+      signOut().catch((err) => console.error("Sign out failed:", err));
     } else {
-      console.error("Logout function not available from AuthContext");
+      console.error("SignOut function not available from AuthContext");
     }
+  };
+
+  // Add handler for login button click
+  const handleLoginClick = () => {
+    signInWithProvider({ provider: "google" }).catch((err) => {
+      // Error is handled in context, but log here just in case
+      console.error("Error initiating Google sign-in from Navbar:", err);
+    });
   };
 
   // Define menu items array for Antd v5+
@@ -192,12 +200,12 @@ const Navbar: React.FC = () => {
             </Dropdown>
           ) : (
             <Space size="middle">
-              <Link to="/login">
-                <Button type="text">Login</Button>
-              </Link>
-              <Link to="/register">
-                <Button type="primary">Register</Button>
-              </Link>
+              <Button type="text" onClick={handleLoginClick}>
+                Login
+              </Button>
+              <Button type="primary" onClick={handleLoginClick}>
+                Register
+              </Button>
             </Space>
           )}
         </Space>
