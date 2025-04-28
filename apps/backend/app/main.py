@@ -16,16 +16,22 @@ from fastapi.concurrency import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.config import LOGGING_CONFIG
 
-# Alembic imports for auto-migration
-from alembic import command
-from alembic.config import Config
+# Remove Alembic imports
+# from alembic import command
+# from alembic.config import Config
 
 from app.routes.routers import api_router
 from app.config import Settings
 from app.core.middleware import TracebackMiddleware
 from app.utils import custom_generate_unique_id
-from app.core.db import engine
-from app.services.sync_service import sync_rawg_games
+
+# Remove old engine import
+# from app.core.db import engine
+# Import Prisma connection handlers
+from app.core.db import connect_db, disconnect_db
+
+# Remove sync service import for now as it depends on engine
+# from app.services.sync_service import sync_rawg_games
 import asyncio
 from contextlib import asynccontextmanager
 
@@ -54,38 +60,35 @@ print("-----------------------\n")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:  # noqa ARG001
-    """life span events, including background RAWG sync."""
-    # --- Omit Database Migration --- #
-    logger.info("Skipping automatic database migrations on startup.")
-    # alembic_cfg = Config("alembic.ini")
-    # alembic_cfg.set_main_option("sqlalchemy.url", settings.SQLALCHEMY_DATABASE_URI)
-    # migration_success = False # Remove migration success check
-    # try:
-    #     command.upgrade(alembic_cfg, "head")
-    #     logger.info("Database migrations completed successfully.")
-    #     migration_success = True
-    # except Exception as e:
-    #     logger.error(f"Database migration failed: {e}", exc_info=True)
+    """life span events, including DB connection and background RAWG sync."""
+    # Connect to DB on startup
+    await connect_db()
 
-    # --- Background RAWG Sync Task --- #
+    # --- Omit Database Migration --- #
+    logger.info(
+        "Skipping automatic database migrations on startup (handled by Prisma CLI)."
+    )
+    # Removed Alembic logic
+
+    # --- Background RAWG Sync Task (COMMENTED OUT) --- #
     bg_task = None
-    # Start the task unconditionally now that migration is omitted
-    logger.info("Creating background task for RAWG sync...")
-    # Use asyncio.create_task to run in background
-    bg_task = asyncio.create_task(sync_rawg_games(engine=engine, pages_to_sync=None))
-    # await sync_rawg_games(engine=engine, pages_to_sync=None) # This would block startup
-    logger.info("Background RAWG sync task created.")
-    # else:
+    logger.info(
+        "Background task for RAWG sync temporarily disabled (needs Prisma update)."
+    )
+    # logger.info("Creating background task for RAWG sync...")
+    # Use Prisma client instance when refactoring sync_rawg_games
+    # bg_task = asyncio.create_task(sync_rawg_games(engine=engine, pages_to_sync=None)) # Requires engine
+    # logger.info("Background RAWG sync task created.")
 
     try:
         yield  # Application runs here
     finally:
-        logger.info("lifespan exit")
+        logger.info("Shutting down application...")
         if bg_task and not bg_task.done():
-            logger.warning(
-                "RAWG sync task may still be running in the background on shutdown."
-            )
-            # Choose cancellation or a longer wait based on requirements
+            logger.warning("RAWG sync task was not running or already finished.")
+        # Disconnect from DB on shutdown
+        await disconnect_db()
+        logger.info("Application shutdown complete.")
 
 
 # init FastAPI with lifespan
@@ -100,14 +103,17 @@ app = FastAPI(
 app.add_middleware(TracebackMiddleware)
 
 # Set all CORS enabled origins
-if settings.all_cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.all_cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# Comment out the conditional check and reliance on settings
+# if settings.all_cors_origins:
+app.add_middleware(
+    CORSMiddleware,
+    # Hardcode the allowed origins list
+    # allow_origins=settings.all_cors_origins,
+    allow_origins=["http://localhost:5173"],  # Add other origins if needed
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # Include the main aggregated router with API version prefix

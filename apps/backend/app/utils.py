@@ -1,26 +1,21 @@
-"""General utility functions."""
-
-import uuid
-
-# Use starlette's Request for type hinting as FastAPI uses it under the hood
-# and it avoids circular dependency issues if utils are imported elsewhere.
-from starlette.requests import Request
+import random
+import string
 
 
-def custom_generate_unique_id(route_request: Request) -> str:
-    """Generates a unique ID for each request.
+def generate_custom_id(prefix: str, length: int = 29) -> str:
+    # Ensure prefix is 2 characters
+    if len(prefix) != 2:
+        raise ValueError("Prefix must be exactly 2 characters long.")
 
-    FastAPI uses this function (if provided) to generate operation IDs
-    visible in the OpenAPI schema, which can be useful for client generation
-    or logging.
+    # Generate random ASCII letters and digits
+    random_chars = "".join(
+        random.choices(string.ascii_letters + string.digits, k=length)
+    )
 
-    Args:
-        route_request: The incoming request object.
+    # Use underscore as separator
+    return f"{prefix}_{random_chars}"
 
-    Returns:
-        A unique string identifier for the request.
-    """
-    # Example: Prefixing a standard UUID4 hex string
-    # You could customize this further, e.g., include timestamp or route info
-    # Be mindful of potential collisions if the logic isn't robustly unique.
-    return f"req_{uuid.uuid4().hex}"
+
+# Example usage (can be removed later):
+# print(generate_custom_id("us"))
+# print(generate_custom_id("ga"))

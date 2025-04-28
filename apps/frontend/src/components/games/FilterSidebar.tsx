@@ -107,14 +107,16 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
             onChange={onPriceChange}
             tipFormatter={(value) => `$${value}`}
             style={{ marginTop: 8 }}
-            aria-label={`Price range slider, currently ${priceRange[0]} to ${priceRange[1]}`}
+            aria-label={`Price range slider, currently ${
+              priceRange?.[0] ?? minPrice
+            } to ${priceRange?.[1] ?? maxPrice}`}
           />
           <Row justify="space-between">
             <Col>
-              <Text type="secondary">${priceRange[0]}</Text>
+              <Text type="secondary">${priceRange?.[0] ?? minPrice}</Text>
             </Col>
             <Col>
-              <Text type="secondary">${priceRange[1]}</Text>
+              <Text type="secondary">${priceRange?.[1] ?? maxPrice}</Text>
             </Col>
           </Row>
         </Form.Item>

@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Layout, Row, Col, Typography, Spin, Alert, message } from "antd";
+import { Layout, Row, Col, Typography, Spin, Alert, message, Flex } from "antd";
 import GameGrid from "@/components/home/GameGrid";
-import dayjs, { Dayjs } from "dayjs";
 import FilterSidebar from "@/components/games/FilterSidebar";
 import ControlsHeader from "@/components/games/ControlsHeader";
 import GamePagination from "@/components/games/GamePagination";
 import { useCart } from "@/contexts/CartContext";
-import { useGames } from "@/hooks/useGames";
-import { Game } from "@/types/game";
+import { useGameControllerListGames } from "@/gen/query/GamesHooks";
+import { GameWithRelations } from "@/gen/types";
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -23,7 +22,7 @@ const safeParseInt = (param: string | null, defaultValue: number): number => {
 
 /**
  * @description Page for browsing, filtering, sorting, and paginating games.
- * Fetches data from the API using useGames hook.
+ * Fetches data directly using the generated useProductControllerListProducts hook.
  * @returns {React.FC} The GamesPage component.
  */
 const GamesPage: React.FC = () => {
@@ -52,6 +51,10 @@ const GamesPage: React.FC = () => {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(
     () => searchParams.getAll("platform") || []
   );
+  const [priceRange, setPriceRange] = useState<[number, number]>([
+    MIN_PRICE,
+    MAX_PRICE,
+  ]);
 
   const { addItem, isMutating: isCartMutating } = useCart();
 
@@ -63,27 +66,47 @@ const GamesPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const {
-    games,
-    totalGames,
-    isLoading: loading,
-    isError: error,
-    mutate: mutateGames,
-  } = useGames({
-    category: selectedCategory === "All" ? undefined : selectedCategory,
-    searchTerm: debouncedSearchTerm,
-    sortBy: sortOption,
+  const apiParams = useMemo(() => {
+    const skip = (currentPage - 1) * pageSize;
+    const sortParts = sortOption.split("_");
+    const sortByField = sortParts[0];
+    const isAsc = sortParts[1]?.toLowerCase() !== "desc";
+
+    return {
+      limit: pageSize,
+      skip: skip,
+      category: selectedCategory === "All" ? undefined : [selectedCategory],
+      search: debouncedSearchTerm || undefined,
+      platform: selectedPlatforms.length > 0 ? selectedPlatforms : undefined,
+      sort_by: sortByField,
+      is_asc: isAsc,
+    };
+  }, [
     currentPage,
     pageSize,
-  });
+    selectedCategory,
+    debouncedSearchTerm,
+    selectedPlatforms,
+    sortOption,
+  ]);
 
-  const currentGames = games;
-  const totalResults = totalGames;
+  const {
+    data: response,
+    error,
+    isLoading,
+    mutate,
+  } = useGameControllerListGames(undefined, { ...apiParams });
+
+  const apiResponse = response?.data;
+  const gamesList = apiResponse?.items;
+
+  const currentGames = gamesList;
+  const totalResults = apiResponse?.total ?? 0;
 
   useEffect(() => {
     const params: Record<string, string | string[]> = {};
     if (selectedCategory !== "All") params.category = selectedCategory;
-    if (debouncedSearchTerm) params.q = debouncedSearchTerm;
+    if (debouncedSearchTerm) params.search = debouncedSearchTerm;
     if (sortOption !== "name_asc") params.sort = sortOption;
     if (currentPage !== 1) params.page = currentPage.toString();
     if (pageSize !== 12) params.limit = pageSize.toString();
@@ -107,6 +130,13 @@ const GamesPage: React.FC = () => {
     setCurrentPage(1);
   };
 
+  const handlePriceChange = (value: number[]) => {
+    if (Array.isArray(value) && value.length === 2) {
+      setPriceRange([value[0], value[1]]);
+      setCurrentPage(1);
+    }
+  };
+
   const handleSearchInputChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -126,22 +156,14 @@ const GamesPage: React.FC = () => {
     }
   };
 
-  const handleQuickBuy = useCallback(
-    async (game: Game) => {
-      console.log(`Quick Buy clicked for game: ${game.title} (ID: ${game.id})`);
-      try {
-        await addItem(game, 1);
-        message.success(`${game.title} added to cart!`);
-      } catch (error) {
-        console.error("Failed to add item via Quick Buy:", error);
-        message.error("Failed to add item to cart. Please try again.");
-      }
-    },
-    [addItem]
+  const availableCategories = useMemo(
+    () => ["All", "Action", "RPG", "Strategy", "Adventure"],
+    []
   );
-
-  const availableCategories = useMemo(() => ["All", ...[]], [games]);
-  const availablePlatforms = useMemo(() => [], [games]);
+  const availablePlatforms = useMemo(
+    () => ["PC", "PlayStation 5", "Xbox Series X", "Nintendo Switch"],
+    []
+  );
 
   const handleClearFilters = useCallback(() => {
     setSelectedCategory("All");
@@ -150,14 +172,8 @@ const GamesPage: React.FC = () => {
     setSortOption("name_asc");
     setCurrentPage(1);
     setViewMode("grid");
-  }, [
-    setSelectedCategory,
-    setSearchInput,
-    setSelectedPlatforms,
-    setSortOption,
-    setCurrentPage,
-    setViewMode,
-  ]);
+    setPriceRange([MIN_PRICE, MAX_PRICE]);
+  }, []);
 
   const handleClearCategory = () => {
     setSelectedCategory("All");
@@ -189,84 +205,100 @@ const GamesPage: React.FC = () => {
     setCurrentPage(1);
   };
 
+  if (isLoading) {
+    return (
+      <Layout style={{ minHeight: "100vh" }}>
+        <Content style={{ padding: "50px", textAlign: "center" }}>
+          <Spin size="large" />
+        </Content>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === "object" && error !== null && "message" in error
+          ? String(error.message)
+          : "An unexpected error occurred while fetching games.";
+    return (
+      <Layout style={{ minHeight: "100vh" }}>
+        <Content style={{ padding: "50px" }}>
+          <Alert
+            message="Error"
+            description={errorMessage}
+            type="error"
+            showIcon
+          />
+        </Content>
+      </Layout>
+    );
+  }
+
   return (
-    <Layout>
-      <Content style={{ padding: "0 50px", marginTop: 20 }}>
+    <Layout style={{ minHeight: "100vh" }}>
+      <Content style={{ padding: "0 50px", marginTop: "20px" }}>
         <Title level={2}>Browse Games</Title>
-        <Row gutter={24}>
-          <Col xs={24} md={6}>
+        <Flex gap="large" style={{ height: "calc(100vh - 150px)" }}>
+          <div
+            style={{
+              width: "280px",
+              flexShrink: 0,
+              padding: "10px",
+              border: "1px solid #f0f0f0",
+              borderRadius: "8px",
+              overflowY: "auto",
+            }}
+          >
             <FilterSidebar
-              categories={["All", "Action", "RPG"]}
-              platforms={["PC", "PlayStation", "Xbox"]}
+              minPrice={MIN_PRICE}
+              maxPrice={MAX_PRICE}
               selectedCategory={selectedCategory}
-              onCategoryChange={handleCategoryChange}
-              priceRange={undefined}
-              onPriceChange={() => {}}
-              selectedRating={null}
-              onRatingChange={() => {}}
+              priceRange={priceRange}
               selectedPlatforms={selectedPlatforms}
-              onPlatformChange={handlePlatformChange}
-              releaseDateRange={undefined}
-              onReleaseDateChange={() => {}}
               onClearFilters={handleClearFilters}
-              onClearCategory={handleClearCategory}
-              onClearPrice={undefined}
-              onClearRating={undefined}
-              onClearPlatforms={handleClearPlatforms}
-              onClearPlatform={handleClearPlatform}
-              onClearReleaseDate={undefined}
+              onCategoryChange={handleCategoryChange}
+              onPriceChange={handlePriceChange}
+              onPlatformChange={handlePlatformChange}
+              categories={availableCategories}
+              platforms={availablePlatforms}
+              selectedRating={null}
+              releaseDateRange={[null, null]}
+              onRatingChange={(value) => {
+                console.log("Rating filter not implemented yet:", value);
+              }}
+              onReleaseDateChange={(dates) => {
+                console.log("Date filter not implemented yet:", dates);
+              }}
+              ratingOptions={[
+                { value: 4, label: "4 Stars & Up" },
+                { value: 3, label: "3 Stars & Up" },
+                { value: 2, label: "2 Stars & Up" },
+                { value: 1, label: "1 Star & Up" },
+              ]}
             />
-          </Col>
-          <Col xs={24} md={18}>
+          </div>
+          <Flex vertical flex={1} style={{ minWidth: 0 }}>
             <ControlsHeader
               sortOption={sortOption}
               onSortChange={handleSortChange}
               viewMode={viewMode}
               onViewModeChange={handleViewModeChange}
-              searchTerm={searchInput}
+              searchInput={searchInput}
               onSearchChange={handleSearchInputChange}
-              totalResults={totalResults}
-              onClearSearch={handleClearSearch}
             />
-            {loading ? (
-              <div style={{ textAlign: "center", padding: "50px" }}>
-                <Spin size="large" />
-              </div>
-            ) : error ? (
-              <Alert
-                message="Error loading games"
-                description={
-                  error.message ||
-                  "Could not load games. Please try again later."
-                }
-                type="error"
-                showIcon
-              />
-            ) : (
-              <>
-                <GameGrid
-                  games={currentGames}
-                  onQuickBuy={handleQuickBuy}
-                  isCartMutating={isCartMutating}
-                />
-                <GamePagination
-                  currentPage={currentPage}
-                  pageSize={pageSize}
-                  totalResults={totalResults}
-                  onPageChange={handlePageChange}
-                />
-                {totalResults === 0 && !loading && (
-                  <Alert
-                    message="No games found matching your criteria."
-                    type="info"
-                    showIcon
-                    style={{ marginTop: 20 }}
-                  />
-                )}
-              </>
-            )}
-          </Col>
-        </Row>
+            <Flex flex={1} style={{ minHeight: 0, marginTop: "16px" }}>
+              <GameGrid games={currentGames || []} />
+            </Flex>
+            <GamePagination
+              currentPage={currentPage}
+              pageSize={pageSize}
+              totalResults={totalResults}
+              onPageChange={handlePageChange}
+            />
+          </Flex>
+        </Flex>
       </Content>
     </Layout>
   );

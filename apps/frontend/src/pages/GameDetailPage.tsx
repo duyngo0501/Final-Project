@@ -17,7 +17,9 @@ import {
   Result,
   Row,
   Col,
+  Divider,
 } from "antd";
+import { ShoppingCartOutlined } from "@ant-design/icons";
 import { Game } from "@/types/game";
 
 const { Title, Paragraph, Text } = Typography;
@@ -51,7 +53,26 @@ const GameDetailPage = (): JSX.Element => {
       setLoading(true);
       try {
         const response = await gamesAPI.getGameById(id);
-        setGame(response.data);
+        const fetchedGameData = response.data;
+        const mappedGame: Game = {
+          id: fetchedGameData.id,
+          title: fetchedGameData.title,
+          thumbnail: fetchedGameData.thumbnail ?? "/placeholder-image.jpg",
+          price:
+            typeof fetchedGameData.price === "number"
+              ? fetchedGameData.price
+              : 0,
+          category: fetchedGameData.category?.[0] ?? "Unknown",
+          description: fetchedGameData.description ?? undefined,
+          rating:
+            typeof fetchedGameData.rating === "number"
+              ? fetchedGameData.rating
+              : undefined,
+          releaseDate: fetchedGameData.releaseDate
+            ? new Date(fetchedGameData.releaseDate).toISOString()
+            : undefined,
+        };
+        setGame(mappedGame);
         setError(null);
       } catch (err: any) {
         console.error("Fetch game error:", err);
@@ -132,7 +153,7 @@ const GameDetailPage = (): JSX.Element => {
         <Col xs={24} md={10}>
           <Image
             width="100%"
-            src={game.imageUrl || "/placeholder-image.png"}
+            src={game.thumbnail || "/placeholder-image.png"}
             alt={game.title}
             preview={false}
           />
@@ -143,23 +164,13 @@ const GameDetailPage = (): JSX.Element => {
           <Divider />
           <Text strong>Price:</Text> ${game.price?.toFixed(2)}
           <br />
-          <Text strong>Genre:</Text> {game.genre}
-          <br />
-          <Text strong>Platform:</Text> {game.platform}
+          <Text strong>Category:</Text> {game.category}
           <br />
           <Text strong>Release Date:</Text>{" "}
           {game.releaseDate
             ? new Date(game.releaseDate).toLocaleDateString()
             : "N/A"}
           <br />
-          <Text strong>Developer:</Text> {game.developer}
-          <br />
-          <Text strong>Publisher:</Text> {game.publisher}
-          <br />
-          <div>
-            <Text strong>Tags:</Text>{" "}
-            {game.tags?.map((tag) => <Tag key={tag}>{tag}</Tag>) ?? "No tags"}
-          </div>
           <Divider />
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <InputNumber

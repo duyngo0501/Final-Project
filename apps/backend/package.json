@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
-    "dev": "source .venv/bin/activate && uv sync && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "dev": "export PRISMA_PY_DEBUG_GENERATOR=1 && source .venv/bin/activate && uv sync && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
     "gen:postman": "cd backend && uv run fastapi-openapi-to-postman http://127.0.0.1:8000/openapi.json > ../postman_collection.json",
     "docker:build": "docker build -t backend-app .",
     "docker:run": "docker run -d --name backend-container -p 8000:8000 backend-app",
@@ -16,17 +16,20 @@
     "db:migrate": "bash scripts/migrate.sh",
     "list": "node scripts/dev.js list",
     "generate": "node scripts/dev.js generate",
-    "parse-prd": "node scripts/dev.js parse-prd"
+    "parse-prd": "node scripts/dev.js parse-prd",
+    "seed": "python app/services/rawg.py",
+    "prisma": "export PRISMA_PY_DEBUG_GENERATOR=1 && npx prisma generate && npx prisma db push"
   },
   "devDependencies": {
-    "nodemon": "^3.0.0"
+    "nodemon": "^3.0.0",
+    "prisma": "^6.6.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "boxen": "^8.0.1",
     "chalk": "^4.1.2",
-    "commander": "^11.1.0",
     "cli-table3": "^0.6.5",
+    "commander": "^11.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
@@ -41,5 +44,14 @@
     "openai": "^4.89.0",
     "ora": "^8.2.0"
   },
-  "type": "module"
+  "type": "module",
+  "description": "> [uv](https://github.com/astral-sh/uv) is an extremely fast Python package and project manager, written in Rust.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

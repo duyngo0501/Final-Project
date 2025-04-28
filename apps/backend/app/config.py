@@ -110,7 +110,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
 
-    ADMIN_EMAIL: str = Field(default="duycanngo95@gmail.com", env="ADMIN_EMAIL")
+    ADMIN_EMAIL: str = Field(default="duycanngo955@gmail.com", env="ADMIN_EMAIL")
 
     @computed_field  # type: ignore[prop-decorator]
     @property

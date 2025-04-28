@@ -1,0 +1,24 @@
+[MAIN]
+# Specify comma-separated regexes matching paths to ignore
+ignore-paths=^\.venv/
+
+[MESSAGES CONTROL]
+# Disable specific messages by ID or symbol
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    invalid-name, C0103,
+    fixme, W0511,
+    no-member, E1101, # Often flags issues with dynamic libraries like Alembic
+    no-self-argument, E0213, # Pylint confusion with Pydantic validators
+    unnecessary-pass, W0107, # Allow pass in simple inheriting classes
+    unused-import, W0611, # Seems pylint misses some Optional uses
+    too-few-public-methods, R0903, # Common for Pydantic/Data models
+    redefined-builtin, W0622,
+    wrong-import-order,
+    not-access,
+enable= no-member
+
+[MASTER]
+init-hook='import sys; sys.path.append(".")'

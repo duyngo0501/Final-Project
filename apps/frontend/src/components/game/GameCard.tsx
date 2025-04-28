@@ -1,44 +1,32 @@
 import React from "react";
 import { Card, Typography, Button, Tag, Space, Image, Badge } from "antd";
 import { ShoppingCartOutlined } from "@ant-design/icons";
-import { Game } from "@/types/game";
+import { GameWithRelations, Game } from "@/gen/types";
+import { useCart } from "@/contexts/CartContext";
 
 const { Title, Text, Paragraph } = Typography;
 
 interface GameCardProps {
-  game: Game;
-  onAddToCart?: (game: Game) => void;
-  isAddingToCart?: boolean;
+  game: GameWithRelations;
   className?: string;
 }
 
 /**
- * @description Displays game information. Handles missing price.
+ * @description Displays game information. Handles adding to cart internally.
  * @param {GameCardProps} props Component props.
  * @returns {React.ReactElement} The rendered GameCard component.
  */
-const GameCard: React.FC<GameCardProps> = ({
-  game,
-  onAddToCart,
-  isAddingToCart,
-  className,
-}) => {
-  const {
-    id,
-    title,
-    thumbnail,
-    price,
-    discountedPrice,
-    category,
-    description,
-  } = game;
+const GameCard: React.FC<GameCardProps> = ({ game, className }) => {
+  const { addItem, isMutating: isAddingToCart } = useCart();
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  const { id, name, background_image, price, categories, description } = game;
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    onAddToCart?.(game);
+    await addItem(game, 1);
   };
 
-  const displayPrice = price >= 0;
+  const displayPrice = price !== null && price !== undefined;
 
   return (
     <Card
@@ -47,8 +35,8 @@ const GameCard: React.FC<GameCardProps> = ({
       style={{ width: "100%", overflow: "hidden" }}
       cover={
         <Image
-          alt={title}
-          src={thumbnail}
+          alt={name}
+          src={background_image ?? "/placeholder-image.jpg"}
           style={{ height: 180, objectFit: "cover" }}
           preview={false}
           fallback="/placeholder-image.jpg"
@@ -60,7 +48,7 @@ const GameCard: React.FC<GameCardProps> = ({
           icon={<ShoppingCartOutlined />}
           onClick={handleAddToCart}
           key={`add-${id}`}
-          disabled={!onAddToCart || isAddingToCart}
+          disabled={isAddingToCart || price === null || price === undefined}
           loading={isAddingToCart}
         >
           {displayPrice ? "Add to Cart" : "Details"}
@@ -69,13 +57,15 @@ const GameCard: React.FC<GameCardProps> = ({
     >
       <Card.Meta
         title={
-          <Title level={5} ellipsis={{ rows: 1, tooltip: title }}>
-            {title}
+          <Title level={5} ellipsis={{ rows: 1, tooltip: name }}>
+            {name}
           </Title>
         }
         description={
           <Space direction="vertical" style={{ width: "100%" }}>
-            <Tag color="blue">{category}</Tag>
+            {categories && categories.length > 0 && categories[0].name && (
+              <Tag color="blue">{categories[0].name}</Tag>
+            )}
             {description && (
               <Paragraph type="secondary" ellipsis={{ rows: 2 }}>
                 {description}

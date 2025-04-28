@@ -24,12 +24,12 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({
   const location = useLocation();
   const {
     isAuthenticated,
-    user,
     isLoadingAuth, // Get loading state from AuthContext
+    isAdmin, // Get isAdmin flag from AuthContext
   } = useAuth((state) => ({
     isAuthenticated: state.isAuthenticated,
-    user: state.user,
     isLoadingAuth: state.loading, // Corrected: Use state.loading based on linter hint
+    isAdmin: state.isAdmin, // Select the isAdmin flag
   }));
 
   // 1. Show loading indicator while auth status is being determined
@@ -58,9 +58,9 @@ const AdminProtectedRoute: React.FC<AdminProtectedRouteProps> = ({
   }
 
   // 3. Redirect to home if authenticated but not an admin
-  if (user?.role !== "admin") {
+  if (!isAdmin) {
     console.log(
-      `[AdminProtectedRoute] User role '${user?.role}' not authorized, redirecting home.`
+      `[AdminProtectedRoute] User is not admin (isAdmin=${isAdmin}), redirecting home.`
     );
     // Optionally show a 'Not Authorized' message before redirecting or redirect directly
     // message.error('You are not authorized to access this page.');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Layout,
   Table,
@@ -12,9 +12,8 @@ import {
   message,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
-import { Game } from "@/types/game"; // Assuming Game type is defined
-// TODO: Replace with actual API hook for admin game fetching
-import { useGames } from "@/hooks/useGames";
+import { GameWithRelations as ApiGame, GameListingResponse } from "@/gen/types"; // Generated API types
+import { useGameControllerListGames } from "@/gen/query/GamesHooks"; // Import the SWR hook
 import type { ColumnsType } from "antd/es/table";
 import type { Key } from "react";
 import GameForm, { GameFormValues } from "@/components/admin/GameForm"; // Import the form
@@ -22,19 +21,68 @@ import GameForm, { GameFormValues } from "@/components/admin/GameForm"; // Impor
 const { Content } = Layout;
 const { Title } = Typography;
 
-// Placeholder data structure if useGames returns different format
-interface AdminGame extends Game {
-  // Add any admin-specific fields if necessary
-}
+// --- Mapping function (same as in SearchResultsPage, potentially move to a util file later) ---
+const mapApiGameToUIGame = (apiGame: ApiGame) => {
+  const categoryName = apiGame.categories?.[0]?.name ?? "Unknown";
+  const platformName = apiGame.platforms?.[0]?.name ?? "Unknown";
+
+  return {
+    id: apiGame.id,
+    title: apiGame.name,
+    thumbnail: apiGame.background_image ?? "/placeholder-image.jpg",
+    price: apiGame.price ?? -1,
+    category: categoryName,
+    description: apiGame.description ?? undefined,
+    platform: platformName,
+    releaseDate: apiGame.released_date ?? undefined,
+    rating: apiGame.rating ?? undefined,
+  };
+};
 
 /**
  * @description Admin page for viewing and managing games with CRUD operations.
  * @returns {React.FC} The AdminGamesPage component.
  */
 const AdminGamesPage: React.FC = () => {
-  const { games, isLoading, error: isError, mutate } = useGames();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 }); // Add pagination state
+  const [sorter, setSorter] = useState<{
+    field?: string;
+    order?: "ascend" | "descend";
+  }>({}); // Add sorter state
+
+  // --- Fetch Games using SWR Hook --- //
+  const {
+    data: response, // Raw SWR response
+    error: fetchError,
+    isLoading,
+    mutate, // SWR mutate function
+  } = useGameControllerListGames(
+    undefined, // No request body for GET
+    {
+      // Query parameters for pagination and sorting
+      limit: pagination.pageSize,
+      skip: (pagination.current - 1) * pagination.pageSize,
+      sort_by: sorter.field,
+      is_asc: sorter.order === "ascend",
+    },
+    {
+      query: {
+        keepPreviousData: true, // Keep showing old data while loading new page
+        revalidateOnFocus: false, // Optional: prevent refetch on window focus
+      },
+    }
+  );
+
+  // --- Process API Response & Map Data --- //
+  const { games, total } = useMemo(() => {
+    const items: ApiGame[] = response?.data?.items ?? [];
+    const mappedGames: UIGame[] = items.map(mapApiGameToUIGame);
+    const totalCount: number = response?.data?.total ?? 0;
+    return { games: mappedGames, total: totalCount };
+  }, [response]);
+
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingGame, setEditingGame] = useState<Game | null>(null);
+  const [editingGame, setEditingGame] = useState<UIGame | null>(null); // Use UIGame type
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- Modal Handlers ---
@@ -43,7 +91,8 @@ const AdminGamesPage: React.FC = () => {
     setIsModalVisible(true);
   };
 
-  const showEditModal = (game: Game) => {
+  const showEditModal = (game: UIGame) => {
+    // Use UIGame type
     setEditingGame(game);
     setIsModalVisible(true);
   };
@@ -91,7 +140,8 @@ const AdminGamesPage: React.FC = () => {
   };
 
   // --- Delete Handler ---
-  const handleDeleteGame = (game: Game) => {
+  const handleDeleteGame = (game: UIGame) => {
+    // Use UIGame type
     Modal.confirm({
       title: `Delete Game: ${game.title}?`,
       content: "Are you sure? This cannot be undone.",
@@ -116,58 +166,63 @@ const AdminGamesPage: React.FC = () => {
     });
   };
 
+  // --- Table Change Handler --- //
+  const handleTableChange = (pagination: any, filters: any, sorter: any) => {
+    setPagination({
+      current: pagination.current,
+      pageSize: pagination.pageSize,
+    });
+    setSorter({ field: sorter.field, order: sorter.order });
+    // SWR will automatically refetch when params change
+  };
+
   // Define table columns
-  const columns: ColumnsType<Game> = [
+  const columns: ColumnsType<UIGame> = [
     {
       title: "ID",
       dataIndex: "id",
       key: "id",
-      width: 80,
-      sorter: (a, b) => a.id - b.id,
+      sorter: true, // Enable server-side sorting
+      width: 150, // Adjust width if needed for UUIDs
     },
     {
       title: "Title",
       dataIndex: "title",
       key: "title",
-      sorter: (a, b) => a.title.localeCompare(b.title),
+      sorter: true, // Enable server-side sorting
     },
-    { title: "Category", dataIndex: "category", key: "category", width: 120 },
+    {
+      title: "Category",
+      dataIndex: "category",
+      key: "category",
+      width: 120,
+      sorter: true,
+    },
     {
       title: "Price",
       dataIndex: "price",
       key: "price",
       width: 120,
-      render: (price: number, record: Game) => (
+      render: (price: number, record: UIGame) => (
         <span>
-          {record.discountedPrice !== undefined &&
-          record.discountedPrice !== null ? (
-            <span>
-              <span
-                style={{
-                  textDecoration: "line-through",
-                  marginRight: "5px",
-                  color: "#888",
-                }}
-              >
-                ${price.toFixed(2)}
-              </span>
-              <span style={{ color: "#f5222d" }}>
-                ${record.discountedPrice.toFixed(2)}
-              </span>
+          {/* Check for unavailable price based on mapping */}
+          {price < 0 ? (
+            <span style={{ fontStyle: "italic", color: "#888" }}>
+              Unavailable
             </span>
           ) : (
-            `$${price.toFixed(2)}`
+            <span>`$${price.toFixed(2)}`</span>
           )}
         </span>
       ),
-      sorter: (a: Game, b: Game) => a.price - b.price,
+      sorter: true, // Enable server-side sorting
     },
     {
       title: "Actions",
       key: "actions",
       width: 150,
       align: "center" as const,
-      render: (_: any, record: Game) => (
+      render: (_: any, record: UIGame) => (
         <Space size="small">
           <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
             Edit
@@ -202,21 +257,31 @@ const AdminGamesPage: React.FC = () => {
           </Button>
         </Row>
 
-        {/* {isError && (
-          <Alert 
-            message="Error loading games" 
-            description={ typeof isError === 'string' ? isError : "Failed to fetch game data."}
-            type="error" 
-            showIcon 
-            style={{ marginBottom: 16 }} 
-           />
-        )} */}
+        {fetchError && (
+          <Alert
+            message="Error loading games"
+            description={
+              fetchError instanceof Error
+                ? fetchError.message
+                : "Failed to fetch game data."
+            }
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
 
         <Table
           columns={columns}
-          dataSource={(games as Game[]) || []}
+          dataSource={games} // Use the mapped games array
           rowKey="id"
           loading={isLoading}
+          pagination={{
+            ...pagination,
+            total: total, // Use total count from API response
+            showSizeChanger: true,
+          }}
+          onChange={handleTableChange} // Handle pagination/sorting changes
           bordered
           size="middle"
         />

@@ -13,10 +13,12 @@ import {
   ShoppingCartOutlined,
   UserOutlined,
   LogoutOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CartContext } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useContextSelector } from "use-context-selector";
 
 const { Header } = Layout;
 const { Search } = Input;
@@ -27,25 +29,30 @@ const menuItemHoverStyle: React.CSSProperties = {
   borderRadius: "4px",
 };
 
+// We need the interface definition here or imported if exported
+// Assuming CartContextValue interface structure is known or can be inferred for the selector
+interface CartContextValue {
+  // Define locally if not exported
+  totalItems: number;
+  // ... other properties from CartContextValue ...
+}
+
 /**
  * @description The site-wide navigation bar with improved styling.
- * Includes logo, search, navigation links, conditional auth buttons, and cart icon.
+ * Includes logo, navigation links, conditional auth buttons, and cart icon.
  * @returns {React.FC} The Navbar component.
  */
 const Navbar: React.FC = () => {
-  const cartContext = useContext(CartContext);
-  const totalItems = cartContext?.totalItems ?? 0;
+  const totalItems = useContextSelector(
+    CartContext,
+    (state: CartContextValue | undefined) => state?.totalItems ?? 0
+  );
   const isAuthenticated = useAuth((state) => state.isAuthenticated);
+  const isAdmin = useAuth((state) => state.isAdmin);
   const signOut = useAuth((state) => state.signOut);
   const signInWithProvider = useAuth((state) => state.signInWithProvider);
   const navigate = useNavigate();
   const location = useLocation(); // Get current location for active link
-
-  const onSearch = (value: string) => {
-    if (value.trim()) {
-      navigate(`/search?q=${encodeURIComponent(value.trim())}`);
-    }
-  };
 
   const handleLogout = () => {
     if (signOut) {
@@ -64,7 +71,7 @@ const Navbar: React.FC = () => {
   };
 
   // Define menu items array for Antd v5+
-  const menuItems = [
+  const baseMenuItems = [
     {
       key: "/",
       label: <Link to="/">Home</Link>,
@@ -81,6 +88,41 @@ const Navbar: React.FC = () => {
       style: location.pathname.startsWith("/blog") ? menuItemHoverStyle : {}, // Apply style if active
     },
   ];
+
+  // Define admin menu items conditionally
+  const adminMenuItems = isAdmin
+    ? [
+        {
+          key: "/admin",
+          label: "Admin",
+          icon: <AppstoreOutlined />,
+          style: location.pathname.startsWith("/admin")
+            ? menuItemHoverStyle
+            : {},
+          children: [
+            {
+              key: "/admin/games",
+              label: <Link to="/admin/games">Manage Games</Link>,
+            },
+            {
+              key: "/admin/users",
+              label: <Link to="/admin/users">Manage Users</Link>,
+            },
+            {
+              key: "/admin/orders",
+              label: <Link to="/admin/orders">Manage Orders</Link>,
+            },
+            {
+              key: "/admin/promotions",
+              label: <Link to="/admin/promotions">Manage Promotions</Link>,
+            },
+          ],
+        },
+      ]
+    : [];
+
+  // Combine menu items
+  const allMenuItems = [...baseMenuItems, ...adminMenuItems];
 
   const userMenu = (
     <Menu
@@ -139,23 +181,21 @@ const Navbar: React.FC = () => {
         </Link>
       </div>
 
-      {/* Center Group: Search + Menu */}
+      {/* Center Group: Menu Only */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "32px",
+          gap: "8px", // Adjust gap if needed
           flexGrow: 1,
           justifyContent: "flex-start",
         }}
       >
-        {" "}
-        {/* Increased gap, align left */}
         <Menu
           theme="light"
           mode="horizontal"
           selectedKeys={[location.pathname]} // Control selected item
-          items={menuItems}
+          items={allMenuItems}
           style={{
             lineHeight: "64px",
             borderBottom: "none", // Remove default border
@@ -165,12 +205,6 @@ const Navbar: React.FC = () => {
             gap: "8px", // Add gap between menu items
           }}
           // Apply hover effect using item's style prop in menuItems array
-        />
-        <Search
-          placeholder="Search games..."
-          onSearch={onSearch}
-          enterButton
-          style={{ width: 300, verticalAlign: "middle" }} // Slightly wider search
         />
       </div>
 

@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+    provider  = "prisma-client-py"
+    // Recommended: Use recursive type generation for better type safety
+    // See https://prisma-client-py.readthedocs.io/en/stable/reference/config/#recursive-type-generation
+    // recursive_type_depth = 5 
+    interface = "asyncio" // Or "sync" if you prefer synchronous code
+}
+
+datasource db {
+    provider = "postgresql" // Or your database provider: "mysql", "sqlite", "sqlserver", "mongodb", "cockroachdb"
+    url      = env("DATABASE_URL")
+    // relationMode = "prisma"
+}
+
+model Game {
+    id                  String      @id @default(uuid()) @db.Uuid
+    rawg_id             Int?        @unique
+    slug                String      @unique
+    name                String      @unique
+    tba                 Boolean     @default(false)
+    released_date       DateTime?   @map("released") @db.Date
+    background_image    String?
+    rating              Float?
+    rating_top          Int?
+    ratings_count       Int?
+    reviews_text_count  Int?
+    added               Int?
+    metacritic          Int?
+    playtime            Int?
+    suggestions_count   Int?
+    reviews_count       Int?
+    saturated_color     String?
+    dominant_color      String?
+    description         String?
+    price               Float?
+    is_custom           Boolean     @default(false) @map("is_custom")
+    created_by_admin_id String?     @db.Uuid
+    created_at          DateTime    @default(now())
+    updated_at          DateTime    @updatedAt
+    CartEntry           CartEntry[]
+    OrderItem           OrderItem[]
+
+    @@index([name])
+    @@index([price])
+    @@index([created_by_admin_id])
+    @@map("games")
+}
+
+model ShoppingCart {
+    id      String @id @default(uuid()) @db.Uuid
+    user_id String @unique @db.Uuid
+
+    items CartEntry[]
+
+    @@map("shopping_carts")
+}
+
+model CartEntry {
+    id       String @id @default(uuid()) @db.Uuid
+    quantity Int    @default(1)
+
+    cart_id String @db.Uuid
+    game_id String @db.Uuid
+
+    cart ShoppingCart @relation(fields: [cart_id], references: [id], onDelete: Cascade)
+    game Game         @relation(fields: [game_id], references: [id])
+
+    @@index([cart_id])
+    @@index([game_id])
+    @@map("cart_entries")
+}
+
+model Order {
+    id             String   @id @default(uuid()) @db.Uuid
+    user_id        String?  @db.Uuid
+    customer_email String
+    customer_phone String?
+    total_amount   Float
+    status         String   @default("processing")
+    order_date     DateTime
+    created_at     DateTime @default(now())
+    updated_at     DateTime @updatedAt
+
+    order_items OrderItem[]
+
+    @@index([user_id])
+    @@index([customer_email])
+    @@index([status])
+    @@map("orders")
+}
+
+model OrderItem {
+    id                String @id @default(uuid()) @db.Uuid
+    quantity          Int
+    price_at_purchase Float
+
+    order_id String @db.Uuid
+    game_id  String @db.Uuid
+
+    order Order @relation(fields: [order_id], references: [id])
+    game  Game  @relation(fields: [game_id], references: [id])
+
+    @@index([order_id])
+    @@index([game_id])
+    @@map("order_items")
+}
+
+model Blog {
+    id      String    @id @default(uuid()) @db.Uuid
+    title   String
+    author  String
+    date    DateTime? @default(now())
+    excerpt String?
+    content String
+
+    @@index([title])
+    @@index([date])
+    @@map("blogs")
+}

@@ -7,7 +7,7 @@ import {
   Image,
   Typography,
   Spin,
-  Alert,
+  Alert as AntAlert,
   Button,
   InputNumber,
   Tag,
@@ -18,35 +18,62 @@ import {
   Descriptions,
 } from "antd";
 import { ShoppingCartOutlined } from "@ant-design/icons";
-import { useGameDetails } from "@/hooks/useGameDetails"; // Import the mock hook
+import { useGameControllerGetGame } from "@/gen/query/GamesHooks"; // Adjust path if needed
 import { useCart } from "@/contexts/CartContext"; // Import cart context
+import { Game } from "@/types/game"; // Import local Game type
+import { GameWithRelations } from "@/gen/types"; // Assuming this is the correct generated type
 
 const { Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
 
 /**
  * @description Displays the detailed information for a single game.
- * Fetches game data based on the ID from the URL.
+ * Fetches game data based on the ID from the URL using SWR.
  * Allows adding the game to the cart.
  * @returns {React.ReactElement} The rendered Game Details page.
  */
 const GameDetailsPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const gameId = id ? parseInt(id, 10) : undefined;
+  const { gameId } = useParams<{ gameId?: string }>(); // gameId is a string from URL
 
-  // Ensure gameId is valid before fetching
-  const isValidId = gameId !== undefined && !isNaN(gameId);
-  const { game, isLoading, isError, isNotFound } = useGameDetails(
-    isValidId ? gameId : undefined
+  // --- Use the generated SWR hook --- //
+  // Ensure gameId is not undefined before calling the hook.
+  // The hook call itself is conditional later.
+  const {
+    data: response, // SWR returns raw AxiosResponse
+    isLoading, // SWR provides isLoading
+    error, // SWR error object
+    mutate, // SWR mutate function
+  } = useGameControllerGetGame(
+    gameId!, // Pass gameId directly
+    { args: {}, kwargs: {} } // WORKAROUND: Pass empty args/kwargs for faulty type
   );
+
+  // --- Extract the actual game details --- //
+  // Access data from response.data
+  const game = response?.data;
+
   const { addItem, isMutating: isCartMutating } = useCart();
   const [quantity, setQuantity] = useState(1);
 
   const handleAddToCart = async () => {
     if (!game) return;
     try {
-      await addItem(game, quantity);
-      message.success(`${quantity} x ${game.title} added to cart!`);
+      // --- Map fetched game (GameWithRelations) to local Game type --- //
+      const gameToAdd: Game = {
+        id: game.id,
+        title: game.name,
+        thumbnail: game.background_image ?? "/placeholder-image.jpg",
+        price: typeof game.price === "number" ? game.price : 0,
+        category: game.categories?.[0]?.name ?? "Unknown",
+        // Only include fields required by the local Game type / addItem function
+        description: game.description ?? undefined, // Include if needed by Game type
+        rating: typeof game.rating === "number" ? game.rating : undefined, // Include if needed
+        releaseDate: game.released_date
+          ? new Date(game.released_date).toISOString()
+          : undefined, // Include if needed
+      };
+      await addItem(gameToAdd, quantity); // Pass the mapped game
+      message.success(`${quantity} x ${game.name} added to cart!`);
     } catch (err) {
       console.error("Failed to add item:", err);
       message.error("Failed to add item to cart. Please try again.");
@@ -54,18 +81,6 @@ const GameDetailsPage: React.FC = () => {
   };
 
   // --- Render Logic ---
-  if (!isValidId) {
-    return (
-      <Alert
-        message="Invalid Game ID"
-        description="The game ID in the URL is missing or invalid."
-        type="error"
-        showIcon
-        style={{ margin: "50px" }}
-      />
-    );
-  }
-
   if (isLoading) {
     return (
       <div style={{ textAlign: "center", padding: "100px" }}>
@@ -74,14 +89,18 @@ const GameDetailsPage: React.FC = () => {
     );
   }
 
-  if (isError) {
+  if (error) {
+    // Check SWR error object directly
     return (
-      <Alert
+      <AntAlert
         message="Error Loading Game"
         description={
-          typeof isError === "string"
-            ? isError
-            : "Could not load game details. Please try again."
+          // FIX: Extract error message safely
+          error instanceof Error
+            ? error.message
+            : typeof error === "object" && error !== null && "message" in error
+              ? String(error.message)
+              : "There was a problem fetching the game details. Please try again later."
         }
         type="error"
         showIcon
@@ -90,11 +109,11 @@ const GameDetailsPage: React.FC = () => {
     );
   }
 
-  if (isNotFound || !game) {
+  if (!game) {
     return (
-      <Alert
+      <AntAlert
         message="Game Not Found"
-        description={`Game with ID ${gameId} could not be found.`}
+        description="The requested game could not be found. It might have been removed or the ID is incorrect."
         type="warning"
         showIcon
         style={{ margin: "50px" }}
@@ -102,40 +121,46 @@ const GameDetailsPage: React.FC = () => {
     );
   }
 
-  const hasDiscount =
-    typeof game.discountedPrice === "number" &&
-    game.discountedPrice < game.price;
-
+  // Success state - Render game details using Ant Design components
   return (
-    <Layout style={{ padding: "24px 0", background: "#fff" }}>
-      <Content style={{ padding: "0 50px" }}>
+    <Layout style={{ minHeight: "100vh" }}>
+      <Content style={{ padding: "50px" }}>
         <Row gutter={[32, 32]}>
-          {/* Left Column: Image */}
-          <Col xs={24} md={10} lg={8}>
+          <Col xs={24} md={12}>
             <Image
               width="100%"
-              // Use cat API if thumbnail is the placeholder, otherwise use thumbnail
-              src={
-                game.thumbnail === "/placeholder-image.jpg"
-                  ? `https://cataas.com/cat/says/game-${game.id}?width=400&height=300` // Adjust size hint
-                  : game.thumbnail
-              }
-              alt={game.title}
-              fallback="/placeholder-image.jpg"
+              src={game.background_image || "/placeholder-image.png"} // Use background_image from GameResponse
+              alt={game.name} // Use name from GameResponse
+              fallback="/placeholder-image.png"
+              style={{ borderRadius: "8px" }}
             />
-            {/* TODO: Add thumbnail gallery if multiple images exist */}
           </Col>
-
-          {/* Right Column: Details & Actions */}
-          <Col xs={24} md={14} lg={16}>
-            <Title level={2}>{game.title}</Title>
+          <Col xs={24} md={12}>
+            <Title level={2}>{game.name}</Title>
+            {/* Display Categories and Platforms if available */}
             <Space wrap style={{ marginBottom: "16px" }}>
-              <Tag color="blue">{game.category}</Tag>
-              {game.rating && (
-                <Rate disabled allowHalf defaultValue={game.rating} />
+              {game.categories?.map(
+                (cat: NonNullable<typeof game.categories>[number]) => (
+                  <Tag key={cat.id} color="blue">
+                    {cat.name}
+                  </Tag>
+                )
               )}
-              {/* Add platform tags if available? */}
+              {game.platforms?.map(
+                (plat: NonNullable<typeof game.platforms>[number]) => (
+                  <Tag key={plat.id} color="green">
+                    {plat.name}
+                  </Tag>
+                )
+              )}
             </Space>
+            {/* Display Rating if available */}
+            {typeof game.rating === "number" && game.rating > 0 && (
+              <div style={{ marginBottom: "16px" }}>
+                <Rate disabled allowHalf value={game.rating} /> (
+                {game.rating.toFixed(1)})
+              </div>
+            )}
 
             {game.description && (
               <Paragraph type="secondary" style={{ marginBottom: "24px" }}>
@@ -147,24 +172,16 @@ const GameDetailsPage: React.FC = () => {
 
             {/* Price Display */}
             <div style={{ marginBottom: "24px" }}>
-              {hasDiscount ? (
-                <Space align="baseline">
-                  <Text strong style={{ fontSize: "1.8em", color: "#f5222d" }}>
-                    ${game.discountedPrice?.toFixed(2)}
-                  </Text>
-                  <Text delete type="secondary" style={{ fontSize: "1.2em" }}>
-                    ${game.price.toFixed(2)}
-                  </Text>
-                </Space>
-              ) : (
-                <Text strong style={{ fontSize: "1.8em" }}>
-                  ${game.price.toFixed(2)}
-                </Text>
-              )}
+              <Text strong style={{ fontSize: "1.8em" }}>
+                {typeof game.price === "number"
+                  ? `$${game.price.toFixed(2)}`
+                  : "Price not available"}
+              </Text>
+              {/* Removed discounted price logic as it's not in model */}
             </div>
 
             {/* Actions: Quantity & Add to Cart */}
-            <Space align="center">
+            <Space align="center" style={{ marginBottom: "24px" }}>
               <InputNumber
                 min={1}
                 max={10} // Or based on stock if available
@@ -179,9 +196,9 @@ const GameDetailsPage: React.FC = () => {
                 size="large"
                 onClick={handleAddToCart}
                 loading={isCartMutating}
-                disabled={isCartMutating}
+                disabled={isCartMutating || !game} // Disable if no game data
               >
-                Add to Cart
+                {isCartMutating ? "Adding..." : "Add to Cart"}
               </Button>
             </Space>
 
@@ -189,12 +206,31 @@ const GameDetailsPage: React.FC = () => {
 
             {/* Other Details (Optional) */}
             <Descriptions column={1} size="small">
-              {game.releaseDate && (
+              {game.released_date && (
                 <Descriptions.Item label="Release Date">
-                  {new Date(game.releaseDate).toLocaleDateString()}
+                  {/* Ensure released_date exists before formatting */}
+                  {game.released_date
+                    ? new Date(game.released_date).toLocaleDateString()
+                    : "N/A"}
                 </Descriptions.Item>
               )}
-              {/* Add Developer, Publisher, etc. if available */}
+              {game.metacritic && (
+                <Descriptions.Item label="Metacritic">
+                  {game.metacritic}
+                </Descriptions.Item>
+              )}
+              {/* Add Developer, Publisher, Website etc. if available and needed */}
+              {(game as any).website && (
+                <Descriptions.Item label="Website">
+                  <a
+                    href={(game as any).website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {(game as any).website}
+                  </a>
+                </Descriptions.Item>
+              )}
             </Descriptions>
           </Col>
         </Row>

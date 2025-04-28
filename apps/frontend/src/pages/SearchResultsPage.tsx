@@ -3,10 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import { Layout, Row, Col, Typography, Spin, Alert, Select, Space } from "antd";
 import GameCard from "@/components/game/GameCard";
 import FilterSidebar from "@/components/games/FilterSidebar";
-import { Game } from "@/types/game";
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
 import utc from "dayjs/plugin/utc"; // Import UTC plugin
+import { useCart } from "@/contexts/CartContext"; // Import Cart Context hook
+import { useGameControllerListGames } from "@/gen/query/GamesHooks/useGameControllerListGames"; // Import SWR Hook for games
+import { Game } from "@/gen/types"; // Import Game type from generated types
 
 dayjs.extend(isBetween);
 dayjs.extend(utc); // Use UTC plugin
@@ -49,91 +51,17 @@ const { Content, Sider } = Layout;
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-// Extended Mock Game Type for filtering/sorting demo
-interface MockGame extends Game {
-  rating: number;
-  releaseDate: string; // Keep as ISO string from mock data
-  platforms: string[];
-}
+// Remove Mock Game Type and related mock data/functions
+// interface MockGame extends Game { ... }
+// const mockFetchAllGames = async (): Promise<MockGame[]> => { ... };
+// const MOCK_CATEGORIES = ...;
+// const MOCK_PLATFORMS = ...;
+// const MIN_PRICE = ...;
+// const MAX_PRICE = ...;
+// const RATING_OPTIONS = ...;
 
-// Mock search function - Fetches ALL games, filtering happens client-side now
-// In a real app, the API would handle filtering/sorting based on params
-const mockFetchAllGames = async (): Promise<MockGame[]> => {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-
-  // More detailed mock data
-  const allGames: MockGame[] = [
-    {
-      id: 1,
-      title: "Galactic Conquest",
-      price: 59.99,
-      category: "Strategy",
-      thumbnail: "/placeholder-image.jpg",
-      description: "Conquer the galaxy!",
-      rating: 4.5,
-      releaseDate: "2023-05-15T00:00:00Z",
-      platforms: ["PC", "PlayStation"],
-    },
-    {
-      id: 2,
-      title: "Cyberpunk Runner",
-      price: 49.99,
-      category: "Action",
-      thumbnail: "/placeholder-image.jpg",
-      description: "Run through neon streets.",
-      rating: 4.0,
-      releaseDate: "2022-11-20T00:00:00Z",
-      platforms: ["PC", "Xbox"],
-    },
-    {
-      id: 3,
-      title: "Fantasy Quest RPG",
-      price: 69.99,
-      category: "RPG",
-      thumbnail: "/placeholder-image.jpg",
-      description: "Embark on an epic quest.",
-      rating: 4.8,
-      releaseDate: "2023-08-01T00:00:00Z",
-      platforms: ["PC", "PlayStation", "Xbox"],
-    },
-    {
-      id: 4,
-      title: "Indie Puzzle Game",
-      price: 19.99,
-      category: "Puzzle",
-      thumbnail: "/placeholder-image.jpg",
-      description: "Solve challenging puzzles.",
-      rating: 3.5,
-      releaseDate: "2021-03-10T00:00:00Z",
-      platforms: ["PC", "Nintendo Switch"],
-    },
-    {
-      id: 5,
-      title: "Space Sim X",
-      price: 79.99,
-      category: "Simulation",
-      thumbnail: "/placeholder-image.jpg",
-      description: "Explore the vastness of space.",
-      rating: 4.2,
-      releaseDate: "2023-01-25T00:00:00Z",
-      platforms: ["PC"],
-    },
-    {
-      id: 6,
-      title: "Strategy Arena",
-      price: 29.99,
-      category: "Strategy",
-      thumbnail: "/placeholder-image.jpg",
-      description: "Compete in strategic battles.",
-      rating: 3.9,
-      releaseDate: "2022-09-05T00:00:00Z",
-      platforms: ["PC", "Mobile"],
-    },
-  ];
-  return allGames;
-};
-
-// Mock data for filters
+// --- TODO: Replace mocks with data potentially fetched from API ---
+// These might come from separate API calls or be hardcoded if static
 const MOCK_CATEGORIES = ["Strategy", "Action", "RPG", "Puzzle", "Simulation"];
 const MOCK_PLATFORMS = [
   "PC",
@@ -150,6 +78,7 @@ const RATING_OPTIONS = [
   { value: 2, label: "2 Stars & Up" },
   { value: 1, label: "1 Star & Up" },
 ];
+// --- End TODO ---
 
 type SortOption =
   | "title-asc"
@@ -164,159 +93,85 @@ const DEFAULT_SORT_OPTION: SortOption = "title-asc";
 /**
  * SearchResultsPage Component
  * Displays game search results based on query param, filters, and sorting.
- * Fetches all games and performs filtering/sorting client-side (mock).
+ * Fetches games using SWR based on URL parameters.
  * Integrates FilterSidebar for user controls.
- * Filter/Sort state is managed in URL query parameters.
+ * Integrates CartContext for adding items.
  *
  * @returns {React.ReactElement} The rendered search results page.
  */
 const SearchResultsPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams(); // Get setSearchParams
+  const [searchParams, setSearchParams] = useSearchParams();
   const query = getParam(searchParams, "q") || "";
 
-  // State for fetched data
-  const [allGames, setAllGames] = useState<MockGame[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Initialize filter/sort state from URL Search Params
-  // Note: We still keep local state, but it's derived from the URL initially
-  // and subsequent updates modify the URL, which triggers re-renders and useMemo recalculation.
-  const initialCategory = getParam(searchParams, "category");
-  const initialMinPrice =
-    getParamAsNumber(searchParams, "minPrice") ?? MIN_PRICE;
-  const initialMaxPrice =
-    getParamAsNumber(searchParams, "maxPrice") ?? MAX_PRICE;
-  const initialRating = getParamAsNumber(searchParams, "rating");
-  const initialPlatforms = getParamAsArray(searchParams, "platforms");
-  const initialStartDate = getParamAsDate(searchParams, "startDate");
-  const initialEndDate = getParamAsDate(searchParams, "endDate");
-  const initialSort =
+  // --- Get Filters and Sort from URL Search Params ---
+  const selectedCategory = getParam(searchParams, "category");
+  const minPrice = getParamAsNumber(searchParams, "minPrice");
+  const maxPrice = getParamAsNumber(searchParams, "maxPrice");
+  const minRating = getParamAsNumber(searchParams, "rating");
+  const selectedPlatforms = getParamAsArray(searchParams, "platforms");
+  const startDate = getParamAsDate(searchParams, "startDate");
+  const endDate = getParamAsDate(searchParams, "endDate");
+  const sortOption =
     (getParam(searchParams, "sort") as SortOption) ?? DEFAULT_SORT_OPTION;
 
-  // Filter state (derived from URL, UI components interact via handlers)
-  const selectedCategory = initialCategory;
-  const priceRange: [number, number] = [initialMinPrice, initialMaxPrice];
-  const minRating = initialRating;
-  const selectedPlatforms = initialPlatforms;
-  const releaseDateRange: [dayjs.Dayjs | null, dayjs.Dayjs | null] = [
-    initialStartDate,
-    initialEndDate,
+  // Derive priceRange for FilterSidebar UI component
+  const displayPriceRange: [number, number] = [
+    minPrice ?? MIN_PRICE,
+    maxPrice ?? MAX_PRICE,
   ];
-  const sortOption = initialSort;
+  const displayReleaseDateRange: [dayjs.Dayjs | null, dayjs.Dayjs | null] = [
+    startDate,
+    endDate,
+  ];
 
-  // Fetch all games once on mount
-  useEffect(() => {
-    const fetchGames = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const games = await mockFetchAllGames();
-        setAllGames(games);
-      } catch (err) {
-        console.error("Fetch failed:", err);
-        setError("Failed to fetch game data. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchGames();
-  }, []);
-
-  // Filter and sort games based on state derived from URL params
-  const filteredAndSortedGames = useMemo(() => {
-    let filtered = [...allGames];
-
-    // Apply search query filter (if any)
-    if (query) {
-      const lowerCaseQuery = query.toLowerCase();
-      filtered = filtered.filter(
-        (game) =>
-          game.title.toLowerCase().includes(lowerCaseQuery) ||
-          game.category.toLowerCase().includes(lowerCaseQuery) ||
-          game.description?.toLowerCase().includes(lowerCaseQuery)
-      );
-    }
-
-    // Apply category filter
-    if (selectedCategory) {
-      filtered = filtered.filter((game) => game.category === selectedCategory);
-    }
-
-    // Apply price filter
-    filtered = filtered.filter(
-      (game) => game.price >= priceRange[0] && game.price <= priceRange[1]
-    );
-
-    // Apply rating filter
-    if (minRating !== undefined) {
-      filtered = filtered.filter((game) => game.rating >= minRating);
-    }
-
-    // Apply platform filter
-    if (selectedPlatforms.length > 0) {
-      filtered = filtered.filter((game) =>
-        selectedPlatforms.some((platform) => game.platforms.includes(platform))
-      );
-    }
-
-    // Apply release date filter
-    const [startDate, endDate] = releaseDateRange;
-    if (startDate && endDate) {
-      filtered = filtered.filter((game) => {
-        // Parse game release date as UTC
-        const releaseDay = dayjs.utc(game.releaseDate);
-        // Ensure comparison dates are also treated as UTC start/end of day
-        const start = startDate.utc().startOf("day");
-        const end = endDate.utc().endOf("day"); // Use end of day for inclusivity
-        // Use isBetween or direct comparison
-        return (
-          releaseDay.isAfter(start.subtract(1, "millisecond")) &&
-          releaseDay.isBefore(end.add(1, "millisecond"))
-        );
-      });
-    }
-
-    // Apply sorting
+  // --- Map SortOption to API parameters ---
+  const { sort_by, sort_order } = useMemo(() => {
     switch (sortOption) {
       case "title-asc":
-        filtered.sort((a, b) => a.title.localeCompare(b.title));
-        break;
+        return { sort_by: "title", sort_order: "asc" };
       case "title-desc":
-        filtered.sort((a, b) => b.title.localeCompare(a.title));
-        break;
+        return { sort_by: "title", sort_order: "desc" };
       case "price-asc":
-        filtered.sort((a, b) => a.price - b.price);
-        break;
+        return { sort_by: "price", sort_order: "asc" };
       case "price-desc":
-        filtered.sort((a, b) => b.price - a.price);
-        break;
+        return { sort_by: "price", sort_order: "desc" };
       case "rating-desc":
-        filtered.sort((a, b) => b.rating - a.rating);
-        break;
+        return { sort_by: "rating", sort_order: "desc" };
       case "releaseDate-desc":
-        filtered.sort(
-          (a, b) =>
-            // Compare UTC timestamps
-            dayjs.utc(b.releaseDate).valueOf() -
-            dayjs.utc(a.releaseDate).valueOf()
-        );
-        break;
+        return { sort_by: "release_date", sort_order: "desc" };
       default:
-        break; // Should not happen
+        return { sort_by: "title", sort_order: "asc" };
     }
+  }, [sortOption]);
 
-    return filtered;
-  }, [
-    allGames,
-    query,
-    selectedCategory,
-    priceRange,
-    minRating,
-    selectedPlatforms,
-    releaseDateRange,
-    sortOption,
-  ]);
+  // --- Fetch Games using SWR Hook ---
+  const {
+    data: gamesResponse,
+    error: fetchError,
+    isLoading: isFetchingGames,
+  } = useGameControllerListGames(
+    undefined, // No request body for GET
+    {
+      // Pass filters and sorting from URL params to the API query params
+      search: query || undefined,
+      sort_by: sort_by,
+      is_asc: sort_order === "asc",
+      limit: 20,
+    },
+    {
+      query: {
+        keepPreviousData: true,
+        revalidateOnFocus: false,
+      },
+    }
+  );
+
+  // Extract games list from the response - Assume structure is { data: { items: Game[] } }
+  // Use ApiGame alias
+  const games: Game[] = gamesResponse?.data?.items ?? [];
+
+  // --- Integrate Cart Context ---
+  const { addItem: addToCart, isMutating: isCartMutating } = useCart();
 
   // --- Handlers to Update URL Search Params ---
 
@@ -335,7 +190,7 @@ const SearchResultsPage: React.FC = () => {
           return newParams;
         },
         { replace: true }
-      ); // Use replace to avoid excessive history entries
+      );
     },
     [setSearchParams]
   );
@@ -408,6 +263,7 @@ const SearchResultsPage: React.FC = () => {
     [updateSearchParams]
   );
 
+  // --- Render Logic ---
   return (
     <Layout style={{ background: "#fff", minHeight: "85vh" }}>
       <Sider
@@ -416,24 +272,22 @@ const SearchResultsPage: React.FC = () => {
           background: "#f0f2f5",
           padding: "20px",
           overflow: "auto",
-          height: "calc(100vh - 64px)", // Adjust based on header height
+          height: "calc(100vh - 64px)",
           position: "sticky",
-          top: "64px", // Adjust based on header height
+          top: "64px",
         }}
       >
         <FilterSidebar
-          // Pass state derived from URL to the sidebar
           minPrice={MIN_PRICE}
           maxPrice={MAX_PRICE}
           categories={MOCK_CATEGORIES}
           platforms={MOCK_PLATFORMS}
           ratingOptions={RATING_OPTIONS}
           selectedCategory={selectedCategory ?? ""}
-          priceRange={priceRange}
+          priceRange={displayPriceRange}
           selectedRating={minRating ?? null}
           selectedPlatforms={selectedPlatforms}
-          releaseDateRange={releaseDateRange}
-          // Pass handlers that update the URL
+          releaseDateRange={displayReleaseDateRange}
           onCategoryChange={handleCategoryChange}
           onPriceChange={(value: number[]) =>
             handlePriceChange(value as [number, number])
@@ -448,66 +302,71 @@ const SearchResultsPage: React.FC = () => {
       </Sider>
       <Layout style={{ padding: "0 24px 24px" }}>
         <Content style={{ padding: "24px", minHeight: 280 }}>
-          <Title level={2} style={{ marginBottom: "24px" }}>
-            Search Results {query ? `for "${query}"` : ""}
-          </Title>
+          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Title level={4}>
+                  {query ? `Search Results for "${query}"` : "Browse Games"}
+                </Title>
+                <Text type="secondary">{games.length} games found</Text>
+              </Col>
+              <Col>
+                <Select
+                  defaultValue={sortOption}
+                  style={{ width: 200 }}
+                  onChange={handleSortChange}
+                >
+                  <Option value="title-asc">Title (A-Z)</Option>
+                  <Option value="title-desc">Title (Z-A)</Option>
+                  <Option value="price-asc">Price (Low-High)</Option>
+                  <Option value="price-desc">Price (High-Low)</Option>
+                  <Option value="rating-desc">Rating (High-Low)</Option>
+                  <Option value="releaseDate-desc">
+                    Release Date (Newest)
+                  </Option>
+                </Select>
+              </Col>
+            </Row>
 
-          <Row justify="end" style={{ marginBottom: "24px" }}>
-            <Space>
-              <Text>Sort by:</Text>
-              <Select
-                value={sortOption} // Use state derived from URL
-                style={{ width: 200 }}
-                onChange={handleSortChange} // Handler updates URL
-              >
-                <Option value="title-asc">Name (A-Z)</Option>
-                <Option value="title-desc">Name (Z-A)</Option>
-                <Option value="price-asc">Price (Low to High)</Option>
-                <Option value="price-desc">Price (High to Low)</Option>
-                <Option value="rating-desc">Rating (High to Low)</Option>
-                <Option value="releaseDate-desc">Release Date (Newest)</Option>
-              </Select>
-            </Space>
-          </Row>
-
-          {loading && (
-            <div style={{ textAlign: "center", marginTop: "50px" }}>
-              <Spin size="large" />
-            </div>
-          )}
-
-          {error && (
-            <Alert
-              message="Error"
-              description={error}
-              type="error"
-              showIcon
-              style={{ marginBottom: "20px" }}
-            />
-          )}
-
-          {!loading && !error && (
-            <>
-              <Text style={{ display: "block", marginBottom: "16px" }}>
-                Found {filteredAndSortedGames.length} game
-                {filteredAndSortedGames.length !== 1 ? "s" : ""}.
-              </Text>
-              {filteredAndSortedGames.length === 0 ? (
-                <Typography.Text>
-                  No games found matching your current search and filters. Try
-                  adjusting your criteria.
-                </Typography.Text>
-              ) : (
-                <Row gutter={[16, 16]}>
-                  {filteredAndSortedGames.map((game) => (
-                    <Col key={game.id} xs={24} sm={12} md={8} lg={8} xl={6}>
-                      <GameCard game={game} />
-                    </Col>
-                  ))}
-                </Row>
-              )}
-            </>
-          )}
+            {isFetchingGames ? (
+              <div style={{ textAlign: "center", marginTop: "50px" }}>
+                <Spin size="large" />
+              </div>
+            ) : fetchError ? (
+              <Alert
+                message={
+                  fetchError instanceof Error
+                    ? fetchError.message
+                    : String(fetchError ?? "Unknown error")
+                }
+                type="error"
+                showIcon
+                style={{ marginBottom: "20px" }}
+              />
+            ) : (
+              <>
+                {games.length === 0 ? (
+                  <Typography.Text type="secondary">
+                    No games found matching your current search and filters. Try
+                    adjusting your criteria.
+                  </Typography.Text>
+                ) : (
+                  <Row gutter={[16, 16]}>
+                    {games.map((game) => (
+                      <Col key={game.id} xs={24} sm={12} md={8} lg={6}>
+                        <GameCard
+                          game={game}
+                          // onAddToCart={() => addToCart(game)}
+                          isAddingToCart={isCartMutating}
+                        />
+                      </Col>
+                    ))}
+                  </Row>
+                )}
+                {/* TODO: Add Pagination controls here if API supports it */}
+              </>
+            )}
+          </Space>
         </Content>
       </Layout>
     </Layout>

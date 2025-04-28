@@ -1,121 +1,243 @@
 import uuid
+from typing import List, Optional  # Added Optional
+from datetime import datetime  # Add datetime for Pydantic models
 
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel, Field  # Import BaseModel and Field
+from prisma import Prisma  # Import Prisma
 
-from app.core.deps import CurrentUser, SessionDep
-from app.dal import shopping_cart, cart_entry_item
-from app.schemas.db_cart import (
-    CartItemCreateSchema,
-    CartItemResponseSchema,
-    CartItemUpdateSchema,
-    CartResponseSchema,
-)
+# Import Prisma errors for specific handling
+from prisma.errors import PrismaError, RecordNotFoundError
+
+# Import Prisma Models for inheritance and type hints
+from prisma.models import ShoppingCart, CartEntry, Game
+
+from app.core.deps import CurrentUser, DbDep  # Changed SessionDep
+
+# --- Define Local Pydantic Models ---
+
+
+class GameItem(Game, BaseModel):  # Inherit from Prisma Game
+    # Fields are inherited from prisma.models.Game
+    class Config:
+        from_attributes = True
+
+
+class CartItemResponse(CartEntry, BaseModel):  # Inherit from Prisma CartEntry
+    # Fields like id, shopping_cart_id, game_id, quantity are inherited
+    game: Optional[GameItem] = None  # Explicitly define the relation type
+
+    class Config:
+        from_attributes = True
+
+
+class CartResponse(ShoppingCart, BaseModel):  # Inherit from Prisma ShoppingCart
+    # Fields like id, user_id, created_at, updated_at are inherited
+    items: List[CartItemResponse] = []  # Explicitly define the relation type
+
+    class Config:
+        from_attributes = True
+
+
+# --- Input Schemas (Do not inherit from Prisma models) ---
+
+
+class CartItemCreate(BaseModel):
+    game_id: str = Field(..., examples=["some-game-uuid"])
+    quantity: int = Field(..., gt=0, examples=[1])  # Ensure quantity is positive
+
+
+class CartItemUpdate(BaseModel):
+    quantity: int = Field(..., examples=[2])
+
+
+# --- REMOVE OLD SCHEMA IMPORT ---
+# from app.schemas.db_cart import (
+#     CartItemCreateSchema,
+#     CartItemResponseSchema,
+#     CartItemUpdateSchema,
+#     CartResponseSchema,
+# )
 
 router = APIRouter()
 
 
-@router.get(
-    "/", response_model=CartResponseSchema, operation_id="CartController_getCart"
-)
-async def read_cart(
-    session: SessionDep, current_user: CurrentUser
-) -> CartResponseSchema:
-    """Retrieve the current user's shopping cart.
+# Helper function to get or create cart using Prisma
+async def get_or_create_cart_prisma(
+    db: Prisma, user_id: str, include_items: bool = False
+) -> ShoppingCart:  # Return type hint Prisma ShoppingCart
+    include_clause = None
+    if include_items:
+        include_clause = {"items": {"include": {"game": True}}}
 
-    Retrieves the cart associated with the authenticated user.
-    If no cart exists, a new empty cart is created and returned.
-
-    Args:
-        session: The database session dependency.
-        current_user: The authenticated user dependency.
-
-    Returns:
-        The user's cart.
-    """
-    user_id = uuid.UUID(current_user.id)  # Ensure user ID is UUID
-    cart = shopping_cart.get_or_create(session, owner_id=user_id)
-    # Eagerly load items if necessary (SQLModel might do this automatically based on schema)
-    # For explicit loading with SQLAlchemy (if SQLModel doesn't cover it):
-    # options = select(Cart).options(selectinload(Cart.items))
-    # statement = options.where(Cart.owner_id == user_id)
-    # cart = session.exec(statement).first()
-    # if not cart: ... create ...
+    cart = await db.shoppingcart.find_unique(
+        where={"user_id": user_id}, include=include_clause
+    )
+    if not cart:
+        cart = await db.shoppingcart.create(
+            data={"user_id": user_id}, include=include_clause
+        )
     return cart
+
+
+@router.get("/", response_model=CartResponse, operation_id="CartController_getCart")
+async def read_cart(
+    db: DbDep, current_user: CurrentUser  # Changed session to db
+) -> CartResponse:  # Update return type hint
+    """Retrieve the current user's shopping cart using Prisma.
+
+    Retrieves the cart associated with the authenticated user, including item details
+    and associated game information using Prisma's include. If no cart exists,
+    a new empty cart is created.
+    """
+    user_id = current_user.id
+
+    try:
+        # --- USE PRISMA DIRECTLY via helper ---
+        cart_prisma = await get_or_create_cart_prisma(
+            db=db, user_id=user_id, include_items=True
+        )
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error getting cart: {e}",
+        )
+
+    # Validate and return using the local Pydantic model
+    return CartResponse.model_validate(cart_prisma)
 
 
 @router.post(
     "/items",
-    response_model=CartItemResponseSchema,
+    response_model=CartItemResponse,  # Update response model
     status_code=status.HTTP_201_CREATED,
     operation_id="CartController_addItem",
 )
 async def add_item_to_cart(
-    item_in: CartItemCreateSchema, session: SessionDep, current_user: CurrentUser
-) -> CartItemResponseSchema:
-    """Add an item to the shopping cart.
+    item_in: CartItemCreate,  # Update input type hint
+    db: DbDep,  # Changed session to db
+    current_user: CurrentUser,
+) -> CartItemResponse:  # Update return type hint
+    """Add an item to the shopping cart using Prisma.
 
     Adds a product with a specified quantity to the user's cart.
-    If the product already exists in the cart, its quantity is increased.
+    Uses Prisma upsert logic (find or create/update) to handle item quantity.
     A cart is created for the user if one doesn't exist.
-
-    Args:
-        item_in: The cart item details (product_id, quantity).
-        session: The database session dependency.
-        current_user: The authenticated user dependency.
-
-    Returns:
-        The created or updated cart item.
     """
-    user_id = uuid.UUID(current_user.id)
-    user_cart = shopping_cart.get_or_create(session, owner_id=user_id)
+    user_id = current_user.id
+    game_id = item_in.game_id
+    quantity = item_in.quantity
 
-    # TODO: Add check here to ensure product_id exists in your Product table
-    # product = crud_product.get(session, id=item_in.product_id)
-    # if not product:
-    #     raise HTTPException(status_code=404, detail="Product not found")
+    # Input validation (quantity > 0) is now handled by CartItemCreate Pydantic model
+    # if quantity <= 0:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Quantity must be positive",
+    #     )
 
-    cart_item = cart_entry_item.add_item(session, cart_id=user_cart.id, item_in=item_in)
-    return cart_item
+    try:
+        # Verify the game exists before adding using Prisma
+        game_exists = await db.game.find_unique(where={"id": game_id})
+        if not game_exists:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        # Get or create the user's cart
+        user_cart = await get_or_create_cart_prisma(db=db, user_id=user_id)
+
+        # Find existing item first approach:
+        existing_item = await db.cart_entry.find_first(
+            where={
+                "shopping_cart_id": user_cart.id,
+                "game_id": game_id,
+            }
+        )
+
+        if existing_item:
+            # Update quantity
+            cart_item_prisma = await db.cart_entry.update(
+                where={"id": existing_item.id},
+                data={"quantity": existing_item.quantity + quantity},
+                include={"game": True},  # Include game for response
+            )
+        else:
+            # Create new item
+            cart_item_prisma = await db.cart_entry.create(
+                data={
+                    "shopping_cart_id": user_cart.id,
+                    "game_id": game_id,
+                    "quantity": quantity,
+                },
+                include={"game": True},  # Include game for response
+            )
+
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error adding item to cart: {e}",
+        )
+
+    # Validate and return using the local Pydantic model
+    return CartItemResponse.model_validate(cart_item_prisma)
 
 
 @router.put(
     "/items/{game_id}",
-    response_model=CartItemResponseSchema,
+    response_model=CartItemResponse,  # Update response model
     operation_id="CartController_updateItemQuantity",
 )
 async def update_cart_item_quantity(
-    game_id: uuid.UUID,
-    item_in: CartItemUpdateSchema,
-    session: SessionDep,
+    game_id: str,
+    item_in: CartItemUpdate,  # Update input type hint
+    db: DbDep,
     current_user: CurrentUser,
-) -> CartItemResponseSchema:
-    """Update the quantity of an item in the cart.
-
-    Sets the quantity for a specific product in the user's cart.
-
-    Args:
-        game_id: The UUID of the game (product) to update.
-        item_in: The new quantity details.
-        session: The database session dependency.
-        current_user: The authenticated user dependency.
-
-    Returns:
-        The updated cart item.
-
-    Raises:
-        HTTPException (404): If the cart or item is not found.
+) -> CartItemResponse:  # Update return type hint
+    """Update the quantity of an item in the cart using Prisma.
+    If quantity becomes 0 or less, the item is removed.
     """
-    user_id = uuid.UUID(current_user.id)
-    user_cart = shopping_cart.get_by_owner(session, owner_id=user_id)
-    if not user_cart:
-        raise HTTPException(status_code=404, detail="Cart not found")
+    user_id = current_user.id
+    new_quantity = item_in.quantity
 
-    updated_item = cart_entry_item.update_item_quantity(
-        session, cart_id=user_cart.id, game_id=game_id, item_in=item_in
-    )
-    if not updated_item:
+    # Input validation (quantity > 0) should ideally be in CartItemUpdate, if needed.
+    # Or handle here if 0 is allowed for deletion logic
+    if new_quantity <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Quantity must be positive. Use DELETE to remove items.",
+        )
+
+    try:
+        # Find the user's cart
+        user_cart = await db.shoppingcart.find_unique(where={"user_id": user_id})
+        if not user_cart:
+            raise HTTPException(status_code=404, detail="Cart not found")
+
+        # Find the specific item
+        item_to_update = await db.cart_entry.find_first(
+            where={
+                "shopping_cart_id": user_cart.id,
+                "game_id": game_id,
+            }
+        )
+
+        if not item_to_update:
+            raise HTTPException(status_code=404, detail="Item not found in cart")
+
+        # Update the quantity
+        updated_item_prisma = await db.cart_entry.update(
+            where={"id": item_to_update.id},
+            data={"quantity": new_quantity},
+            include={"game": True},  # Include game for response
+        )
+        # Validate and return using the local Pydantic model
+        return CartItemResponse.model_validate(updated_item_prisma)
+
+    except RecordNotFoundError:  # Catch potential delete error if item vanishes
         raise HTTPException(status_code=404, detail="Item not found in cart")
-    return updated_item
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error updating cart item: {e}",
+        )
 
 
 @router.delete(
@@ -124,36 +246,47 @@ async def update_cart_item_quantity(
     operation_id="CartController_removeItem",
 )
 async def remove_item_from_cart(
-    game_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
+    game_id: str,
+    db: DbDep,
+    current_user: CurrentUser,
 ) -> None:
-    """Remove an item from the shopping cart.
+    """Remove an item from the shopping cart using Prisma."""
+    user_id = current_user.id
 
-    Deletes a specific product from the user's cart.
+    try:
+        # Find the user's cart first
+        user_cart = await db.shoppingcart.find_unique(where={"user_id": user_id})
+        if not user_cart:
+            # If cart doesn't exist, item definitely doesn't exist
+            raise HTTPException(status_code=404, detail="Item not found in cart")
 
-    Args:
-        game_id: The UUID of the game (product) to remove.
-        session: The database session dependency.
-        current_user: The authenticated user dependency.
+        # Find the item within the user's cart
+        item_to_delete = await db.cart_entry.find_first(
+            where={
+                "shopping_cart_id": user_cart.id,
+                "game_id": game_id,
+            }
+        )
 
-    Returns:
-        None. Returns 204 No Content on success.
+        if not item_to_delete:
+            raise HTTPException(status_code=404, detail="Item not found in cart")
 
-    Raises:
-        HTTPException (404): If the cart or item is not found.
-    """
-    user_id = uuid.UUID(current_user.id)
-    user_cart = shopping_cart.get_by_owner(session, owner_id=user_id)
-    if not user_cart:
-        # Or just return 204 if removing from non-existent cart is okay
-        raise HTTPException(status_code=404, detail="Cart not found")
+        # Delete the specific cart entry using its unique ID
+        await db.cart_entry.delete(where={"id": item_to_delete.id})
 
-    removed_item = cart_entry_item.remove_item(
-        session, cart_id=user_cart.id, game_id=game_id
-    )
-    if not removed_item:
-        raise HTTPException(status_code=404, detail="Item not found in cart")
+    except (
+        RecordNotFoundError
+    ):  # Catch potential error if item deleted between find and delete
+        # Technically, the item is already gone, so 204 is still appropriate.
+        # Or raise 404 if strict confirmation is needed.
+        pass  # Successfully deleted or already gone
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error removing item from cart: {e}",
+        )
 
-    # No content to return on successful deletion
+    # Return None for 204 No Content response
     return None
 
 
@@ -162,28 +295,23 @@ async def remove_item_from_cart(
     status_code=status.HTTP_204_NO_CONTENT,
     operation_id="CartController_clearCart",
 )
-async def clear_cart(session: SessionDep, current_user: CurrentUser) -> None:
-    """Clear all items from the shopping cart.
+async def clear_cart(db: DbDep, current_user: CurrentUser) -> None:
+    """Clear all items from the user's shopping cart using Prisma."""
+    user_id = current_user.id
 
-    Removes all items associated with the user's cart.
+    try:
+        # Find the user's cart
+        user_cart = await db.shoppingcart.find_unique(where={"user_id": user_id})
 
-    Args:
-        session: The database session dependency.
-        current_user: The authenticated user dependency.
+        if user_cart:
+            # Delete all cart entries associated with this cart_id
+            await db.cart_entry.delete_many(where={"shopping_cart_id": user_cart.id})
 
-    Returns:
-        None. Returns 204 No Content on success.
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error clearing cart: {e}",
+        )
 
-    Raises:
-        HTTPException (404): If the cart is not found.
-    """
-    user_id = uuid.UUID(current_user.id)
-    user_cart = shopping_cart.get_by_owner(session, owner_id=user_id)
-    if not user_cart:
-        # Or just return 204 if clearing non-existent cart is okay
-        raise HTTPException(status_code=404, detail="Cart not found")
-
-    cart_entry_item.clear_cart(session, cart_id=user_cart.id)
-
-    # No content to return on successful deletion
+    # Return None for 204 No Content response
     return None

@@ -1,146 +1,247 @@
 import uuid
-from typing import List, Any, Annotated
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from typing import List, Any, Annotated, Optional
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Path
 from fastapi.routing import Request as FastAPIRequest
-from sqlmodel import Session
+from pydantic import BaseModel, Field
+
+# Import Prisma errors, client and models
+from prisma.errors import PrismaError, RecordNotFoundError, UniqueViolationError
+from prisma import Client as PrismaClient
+from prisma.models import Game, Platform, Category
 
 # Dependencies
-from app.core.deps import SessionDep, AdminUser
+from app.core.deps import DbDep, AdminUser
 
-# Import SessionDep instead of AdminUser if no admin actions here yet
+# Remove old DAL import
+# from app.dal import crud_game
 
-# CRUD
-# Import instantiated CRUD objects from __init__
-from app.dal import game
+# --- Define Local Pydantic Models (Similar to router_games.py) ---
 
-# Models & Schemas
-# Update import paths
-from app.schemas.db_game import (
-    GameCreateSchema,
-    GamePublicSchema,
-    GameListSchema,
-)
 
-# from app.schemas.db_game import GameReadSchema # Update commented import
-from app.schemas.db_product import ProductListingResponse  # Update import path
+class PlatformItem(Platform, BaseModel):
+    class Config:
+        from_attributes = True
 
-# Use the new GameReadSchema for type hinting if needed, but response uses ProductListingResponse
-# from app.schemas.game import GameReadSchema
 
-# Remove unused import
-# from app.services.game_api_client import get_rawg_games
+class CategoryItem(Category, BaseModel):
+    class Config:
+        from_attributes = True
+
+
+class GameResponse(Game, BaseModel):
+    platforms: List[PlatformItem] = []
+    categories: List[CategoryItem] = []
+
+    class Config:
+        from_attributes = True
+
+
+class GameListingResponse(BaseModel):
+    items: List[GameResponse]
+    total: int
+    page: int
+    limit: int
+    pages: int
+
+
+class GameCreateSchema(BaseModel):
+    name: str = Field(..., examples=["Cyberpunk 2077"])
+    description: Optional[str] = Field(None, examples=["An open-world action RPG."])
+    price: Optional[float] = Field(None, examples=[59.99])
+    released_date: Optional[datetime] = Field(None, examples=["2020-12-10T00:00:00Z"])
+    background_image: Optional[str] = Field(
+        None, examples=["https://example.com/image.jpg"]
+    )
+
+
+class SyncResponse(BaseModel):
+    status: str
+    results: Any
+
+
+# --- Remove old Schema Imports ---
+# from app.schemas.db_game import (
+#     GameCreateSchema,
+#     GamePublicSchema,
+#     GameListingResponse,
+#     GameDetailResponseSchema,
+# )
+
+# Remove unused service import (assuming moved to router_games)
+# from app.services.rawg_service import fetch_games_from_rawg
 
 router = APIRouter()
-
-# --- Remove Placeholder Data ---
-# DUMMY_PRODUCTS = [ ... ]
 
 
 @router.get(
     "/",
-    response_model=ProductListingResponse,
+    response_model=GameListingResponse,
     operation_id="ProductController_listProducts",
+    summary="List Products/Games",
+    description="Retrieve a list of products/games with filtering, sorting, and pagination.",
 )
-def list_products(
+async def list_products(
     request: Request,
-    session: SessionDep,
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Number of items per page"),
-    # Add filtering? e.g., is_custom: bool | None = None
-) -> Any:
+    db: PrismaClient = Depends(DbDep),
+    skip: int = 0,
+    limit: int = 10,
+    search: Optional[str] = None,
+    category: Optional[List[str]] = None,
+    platform: Optional[List[str]] = None,
+    sort_by: Optional[str] = None,
+    is_asc: bool = True,
+) -> GameListingResponse:
     """
-    Retrieve a list of products (games) from the local database with pagination.
+    Retrieve a list of games using Prisma client.
+    Optionally filter by search term, category, platform, and sort the results.
     """
-    skip = (page - 1) * page_size
+    where_clause = {}
+    if search:
+        where_clause["name"] = {"contains": search, "mode": "insensitive"}
+    if category:
+        where_clause["categories"] = {
+            "some": {"name": {"in": category, "mode": "insensitive"}}
+        }
+    if platform:
+        where_clause["platforms"] = {
+            "some": {"name": {"in": platform, "mode": "insensitive"}}
+        }
 
-    # Fetch games using the unified CRUD instance
-    games_list = game.get_multi(db=session, skip=skip, limit=page_size)
+    order_by = None
+    if sort_by:
+        field = sort_by
+        direction = "asc" if is_asc else "desc"
+        allowed_sort_fields = [
+            "name",
+            "price",
+            "released_date",
+            "rating",
+            "metacritic",
+            "created_at",
+        ]
+        if field in allowed_sort_fields:
+            order_by = [{field: direction}]
 
-    # Get total count
-    total_count = game.get_count(db=session)
+    try:
+        total = await db.game.count(where=where_clause)
+        items_prisma = await db.game.find_many(
+            where=where_clause,
+            skip=skip,
+            take=limit,
+            order_by=order_by,
+            include={"platforms": True, "categories": True},
+        )
+        pages = (total + limit - 1) // limit if limit > 0 else 0
 
-    # --- Response Formatting ---
-    # Convert Game model instances to GamePublicSchema instances first
-    results_as_schema = [GamePublicSchema.model_validate(g) for g in games_list]
-    # Then convert schemas to dicts, ensuring UUID is stringified
-    results_as_dicts = []
-    for g_schema in results_as_schema:
-        g_dict = g_schema.model_dump()
-        g_dict["id"] = str(g_dict["id"])  # Explicitly convert UUID to string
-        results_as_dicts.append(g_dict)
-    # -------------------------
-
-    # Construct next/previous URLs
-    next_url = None
-    if (skip + page_size) < total_count:
-        next_url = str(request.url.replace_query_params(page=page + 1))
-    previous_url = None
-    if page > 1:
-        previous_url = str(request.url.replace_query_params(page=page - 1))
-
-    # Return using ProductListingResponse (assuming it handles List[dict])
-    return ProductListingResponse(
-        count=total_count,
-        next=next_url,
-        previous=previous_url,
-        results=results_as_dicts,
-    )
-
-
-# --- Combined Create/Delete Endpoints ---
+        return GameListingResponse(
+            items=[GameResponse.model_validate(item) for item in items_prisma],
+            total=total,
+            page=(skip // limit) + 1,
+            limit=limit,
+            pages=pages,
+        )
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Database error fetching game list: {e}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Internal server error fetching game list: {e}"
+        )
 
 
 @router.post(
     "/",
-    response_model=GamePublicSchema,
+    response_model=GameResponse,
     status_code=status.HTTP_201_CREATED,
-    operation_id="ProductController_createGame",
+    operation_id="ProductController_createProduct",
 )
-def create_game_endpoint(
+async def create_product_endpoint(
     *,
-    session: SessionDep,
+    db: PrismaClient = Depends(DbDep),
     game_in: GameCreateSchema,
     admin_user: AdminUser,
-):
+) -> GameResponse:
     """
-    Create a new game (RAWG or custom - controlled by game_in.is_custom).
-    Admin only.
+    Create a new game/product (Admin only).
     """
-    # Check for duplicates? (e.g., existing slug or rawg_id) - depends on requirements
-    # existing_game = game.get_by_slug(db=session, slug=game_in.slug)
-    # if existing_game:
-    #     raise HTTPException(...)
-    # if not game_in.is_custom and game_in.rawg_id:
-    #     existing_rawg = game.get_by_rawg_id(db=session, rawg_id=game_in.rawg_id)
-    #     if existing_rawg:
-    #         raise HTTPException(...)
-
-    # Use the unified game.create method
-    # Ensure game_in includes 'is_custom' flag
     try:
-        new_game = game.create(db=session, obj_in=game_in)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    return new_game
+        data_to_create = game_in.model_dump(exclude_unset=True)
+        new_game_prisma = await db.game.create(
+            data=data_to_create, include={"platforms": True, "categories": True}
+        )
+    except UniqueViolationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Product creation failed due to unique constraint: {e}",
+        )
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error creating product: {e}",
+        )
+    return GameResponse.model_validate(new_game_prisma)
 
 
 @router.delete(
-    "/{game_id}",
+    "/{product_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    operation_id="ProductController_deleteGame",
+    operation_id="ProductController_deleteProduct",
 )
-def delete_game_endpoint(
+async def delete_product_endpoint(
     *,
-    session: SessionDep,
-    game_id: uuid.UUID,
+    db: PrismaClient = Depends(DbDep),
+    product_id: str,
     admin_user: AdminUser,
-):
+) -> None:
     """
-    Delete a game by its local UUID (Admin only).
+    Delete a product/game by its ID (Admin only).
     """
-    deleted_game = game.remove(db=session, id=game_id)
-    if not deleted_game:
+    try:
+        await db.game.delete(where={"id": product_id})
+    except RecordNotFoundError:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Game not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found"
         )
-    # No content returned
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database error deleting product: {e}",
+        )
+    return None
+
+
+@router.get(
+    "/{product_id}",
+    response_model=GameResponse,
+    summary="Get Product/Game Details",
+    description="Retrieve detailed information for a specific product/game by its ID.",
+    operation_id="ProductController_getProduct",
+)
+async def get_product_details(
+    product_id: str = Path(..., description="The ID of the product/game to retrieve"),
+    db: PrismaClient = Depends(DbDep),
+) -> GameResponse:
+    """Retrieves detailed game info including platforms/categories using Prisma."""
+    try:
+        db_game = await db.game.find_unique(
+            where={"id": product_id},
+            include={"platforms": True, "categories": True},
+        )
+    except PrismaError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Database error fetching product details: {e}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error fetching product details: {e}",
+        )
+
+    if db_game is None:
+        raise HTTPException(
+            status_code=404, detail=f"Product with id {product_id} not found"
+        )
+
+    return GameResponse.model_validate(db_game)

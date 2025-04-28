@@ -71,17 +71,34 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // --- Get Admin Email from Environment Variables ---
+  // Ensure VITE_ADMIN_EMAIL is set in your .env file and exposed by Vite
+  const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+  if (!adminEmail) {
+    console.warn(
+      "VITE_ADMIN_EMAIL environment variable is not set. Admin checks will not work."
+    );
+  }
+
   // Derived state
   const isAuthenticated = !!session && !!user;
-  // TODO: Implement isAdmin logic based on your Supabase setup (e.g., roles in user_metadata or a separate roles table)
+  // --- Implement isAdmin logic using Environment Variable ---
   const isAdmin = useMemo(() => {
-    // Example: Check for 'admin' role in user_metadata
-    // return user?.user_metadata?.role === 'admin';
-    // Example: Check for 'admin' in app_metadata (less common for roles)
-    // return user?.app_metadata?.role === 'admin';
-    // For now, default to false until role logic is defined
-    return false;
-  }, [user]);
+    console.log("[AuthContext] Checking isAdmin:");
+    console.log("[AuthContext] User:", user);
+    console.log("[AuthContext] User Email:", user?.email);
+    console.log("[AuthContext] Admin Email Env:", adminEmail);
+
+    if (!user || !adminEmail) {
+      console.log("[AuthContext] isAdmin: false (No user or adminEmail)");
+      return false; // Not admin if no user or no admin email configured
+    }
+    // Compare user's email with the configured admin email
+    // Ensure case-insensitive comparison
+    const isMatch = user.email?.toLowerCase() === adminEmail.toLowerCase();
+    console.log("[AuthContext] Email Match Result:", isMatch);
+    return isMatch;
+  }, [user, adminEmail]); // Add adminEmail to dependency array
 
   // --- Setup onAuthStateChange listener ---
   useEffect(() => {

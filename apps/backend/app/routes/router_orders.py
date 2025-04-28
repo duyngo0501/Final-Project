@@ -1,262 +1,288 @@
 import logging
 import uuid
-from typing import List
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from pydantic import BaseModel, Field
+from prisma import Prisma
+from prisma.models import Order, OrderItem, Game
+from prisma.errors import PrismaError, RecordNotFoundError
 
-# Reverted imports to use absolute paths from 'app'
-from app.core.deps import SessionDep, CurrentUser
-from app.models.model_order import Order, OrderItem
-from app.schemas.db_order import (
-    OrderCreateSchema,
-    OrderItemCreateSchema,
-    OrderResponseSchema,
-)
+from app.core.deps import DbDep, CurrentUser
 
-# from app.utils.email import send_order_confirmation_email # Removed incorrect import
+# --- Define Local Pydantic Models ---
 
-# Auth Dependency (Optional - adjust based on auth requirements)
-# from app.auth.dependencies import get_current_user, User
+
+class GameItem(Game, BaseModel):
+    # Fields are inherited from prisma.models.Game
+    class Config:
+        from_attributes = True
+
+
+class OrderItemResponse(OrderItem, BaseModel):
+    # Fields like id, order_id, game_id, quantity, price_at_purchase inherited
+    game: Optional[GameItem] = None
+
+    class Config:
+        from_attributes = True
+
+
+class OrderResponse(Order, BaseModel):
+    # Fields like id, user_id, status, total_amount, order_date inherited
+    order_items: List[OrderItemResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+# --- Input Schemas ---
+
+
+class OrderCreate(BaseModel):
+    # Define fields expected in the request body for creating an order
+    # These likely don't come directly from the user but are set server-side,
+    # except maybe contact info if not tied to user profile.
+    # This schema might be simplified depending on actual API contract.
+    customer_email: str = Field(..., examples=["customer@example.com"])
+    customer_phone: Optional[str] = Field(None, examples=["123-456-7890"])
+    # Other fields like address might be added here if needed
+
+
+# --- REMOVED OLD CRUD IMPORTS ---
+# from app.dal.crud_order import CRUDOrder
+# from app.dal.crud_order_item import CRUDOrderItem
+# from app.dal.crud_shopping_cart import CRUDShoppingCart
+# from app.dal.crud_cart_entry_item import CRUDCartEntryItem
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# Placeholder for cart fetching/clearing logic - Replace with actual implementation
-async def get_cart_items_for_user(user_id: int, db: Session) -> list[dict]:
-    # Example: Fetch from a Cart model linked to the user
-    logger.warning(f"Placeholder: Fetching cart items for user {user_id}")
-    # Replace with actual cart fetching logic. Return list of dicts like {'item_id': 1, 'quantity': 2}
-    return [  # Dummy data
-        {"item_id": 1, "quantity": 1, "title": "GTA V", "price": 250000},
-        {"item_id": 2, "quantity": 1, "title": "Call of Duty", "price": 310000},
-    ]
+async def get_cart_items_for_user_prisma(
+    user_id: str, db: Prisma
+) -> List[Dict[str, Any]]:
+    """Fetches cart items and formats them for order creation using Prisma."""
+    try:
+        cart = await db.shoppingcart.find_unique(
+            where={"user_id": user_id}, include={"items": {"include": {"game": True}}}
+        )
+    except PrismaError as e:
+        logger.error(f"Prisma error fetching cart for user {user_id}: {e}")
+        # Decide how to handle DB error here - raise HTTP 500 or return empty?
+        # Returning empty for now to prevent order failure due to temp DB issue
+        return []
+
+    if not cart or not cart.items:
+        return []
+
+    # Format items similar to placeholder, getting necessary info
+    formatted_items = []
+    for item in cart.items:
+        if item.game:  # Ensure game relationship was loaded
+            formatted_items.append(
+                {
+                    "game_id": item.game.id,
+                    "quantity": item.quantity,
+                    "title": item.game.name,
+                    "price": item.game.price,  # Use current game price
+                }
+            )
+        else:
+            logger.warning(
+                f"Cart item {item.id} missing game relation in get_cart_items_for_user_prisma"
+            )
+    return formatted_items
 
 
-async def clear_cart_for_user(user_id: int, db: Session):
-    logger.warning(f"Placeholder: Clearing cart for user {user_id}")
-    # Replace with actual cart clearing logic
-    pass
+async def clear_cart_for_user_prisma(user_id: str, db: Prisma):
+    """Clears the user's cart using Prisma."""
+    try:
+        cart = await db.shoppingcart.find_unique(where={"user_id": user_id})
+
+        if cart:
+            await db.cart_entry.delete_many(where={"shopping_cart_id": cart.id})
+            logger.info(f"Cleared cart for user {user_id}")
+        else:
+            logger.info(f"No cart found to clear for user {user_id}")
+
+    except PrismaError as e:
+        logger.error(f"Prisma error clearing cart for user {user_id}: {e}")
+        # Don't raise HTTP exception here, as it's within an order transaction
+        # Log the error; the transaction might roll back if this fails critically
 
 
-def format_currency(amount: float) -> str:
-    # Simple Vietnamese Dong formatting - replace with a robust library if needed
+def format_currency(amount: float | None) -> str:
+    if amount is None:
+        return "N/A"
     try:
         return f"{int(amount):,}đ".replace(",", ".")
-    except ValueError:  # Catch specific error if amount cannot be converted to int
-        # Fallback for non-integer amounts or formatting errors
+    except (ValueError, TypeError):
         return f"{amount}đ"
 
 
 @router.post(
     "/",
-    response_model=OrderResponseSchema,
+    response_model=OrderResponse,
     status_code=status.HTTP_201_CREATED,
     operation_id="OrderController_createOrder",
 )
 async def create_order(
-    order_in: OrderCreateSchema, session: SessionDep, current_user: CurrentUser
-):
+    order_in: OrderCreate, db: DbDep, current_user: CurrentUser
+) -> OrderResponse:
     """
-    Place a new order.
-    Receives customer info, fetches cart items (placeholder), calculates total,
-    creates order and order items in DB, clears cart, and sends confirmation email.
+    Place a new order using Prisma.
+    Uses a transaction to ensure atomicity of order creation and cart clearing.
     """
     logger.info(f"Received order request from email: {order_in.customer_email}")
+    user_id = current_user.id
+    user_name = current_user.user_metadata.get("full_name", current_user.email)
 
-    # --- 1. Identify User ---
-    user_id = current_user.id  # Use ID from authenticated user
-    user_name = current_user.user_metadata.get(
-        "full_name", current_user.email
-    )  # Get name or default to email
-
-    # --- 2. Fetch Cart Items (Placeholder) ---
-    # TODO: Replace placeholder with actual cart fetching logic using user_id and cart.py
-    # cart = crud_cart.cart.get_by_owner(session, owner_id=user_id)
-    # if not cart or not cart.items:
-    #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot place order with an empty cart")
-    # cart_items_data = cart.items # Assuming cart.items has the necessary structure
-
-    # Using placeholder for now
-    cart_items_data = await get_cart_items_for_user(user_id, session)  # Use placeholder
-
-    if not cart_items_data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot place order with an empty cart",
-        )
-
-    # --- 3. Calculate Total & Prepare Order Items ---
-    total_amount = 0.0
-    order_items_to_create: list[OrderItemCreateSchema] = []
-    email_items_list: list[str] = []
-    item_index = 1
-
-    # It's better to fetch current prices from DB than trust cart data completely
-    # For simplicity here, we use prices from the placeholder cart data
-    for cart_item in cart_items_data:
-        item_id = cart_item.get("item_id")
-        quantity = cart_item.get("quantity")
-        # Fetch Item from DB to confirm price and existence (essential step)
-        # db_item = db.query(Item).filter(Item.id == item_id).first()
-        # if not db_item:
-        #     logger.error(f"Item with ID {item_id} not found in DB during order creation.")
-        #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Item ID {item_id} not found.")
-        # price = db_item.price # Use actual price from DB
-
-        # Using placeholder price from cart data for now
-        price = cart_item.get("price", 0)
-        title = cart_item.get("title", "Unknown Item")  # Placeholder title
-        if not item_id or quantity is None or price is None:
-            logger.error(f"Invalid cart item data: {cart_item}")
+    # --- Start Transaction ---
+    async with db.tx() as transaction:
+        # --- 1. Fetch and Validate Cart Items --- #
+        cart_items_data = await get_cart_items_for_user_prisma(user_id, transaction)
+        if not cart_items_data:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid item data in cart.",
+                detail="Cannot place order with an empty cart",
             )
 
-        item_total = price * quantity
-        total_amount += item_total
+        # --- 2. Calculate Total & Prepare OrderItem Data --- #
+        total_amount = 0.0
+        order_items_create_data = []  # For nested create
+        email_items_list = []
 
-        order_items_to_create.append(
-            OrderItemCreateSchema(
-                game_id=item_id,  # Ensure game_id field name matches OrderItemCreate schema
-                quantity=quantity,
-                price_at_purchase=price,
+        for index, cart_item in enumerate(cart_items_data):
+            game_id = cart_item.get("game_id")
+            quantity = cart_item.get("quantity")
+            title = cart_item.get("title", "Unknown Item")
+            price_at_purchase = cart_item.get("price")  # Using current price fetched
+
+            if not game_id or quantity is None or price_at_purchase is None:
+                logger.error(
+                    f"Invalid cart item data during order creation: {cart_item}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid item data found in cart.",
+                )
+
+            # Optional: Verify game existence again within transaction if paranoid
+            # game_check = await crud_game.get(db=transaction, id=game_id)
+            # if not game_check:
+            #    raise HTTPException(status_code=400, detail=f"Game {game_id} not found")
+
+            item_total = price_at_purchase * quantity
+            total_amount += item_total
+
+            # Prepare data for nested create
+            order_items_create_data.append(
+                {
+                    "game_id": game_id,
+                    "quantity": quantity,
+                    "price_at_purchase": price_at_purchase,
+                }
             )
-        )
+            email_items_list.append(
+                f"{index + 1}. {title} – {format_currency(price_at_purchase)}"
+            )
 
-        # Prepare item string for email
-        email_items_list.append(f"{item_index}. {title} – {format_currency(price)}")
-        item_index += 1
+        # --- 3. Create Order with Nested Items --- #
+        order_date = datetime.utcnow()
+        try:
+            new_order = await transaction.order.create(
+                data={
+                    "user_id": user_id,
+                    "customer_email": order_in.customer_email,
+                    "customer_phone": order_in.customer_phone,
+                    "total_amount": total_amount,
+                    "status": "processing",
+                    "order_date": order_date,
+                    "order_items": {
+                        "create": order_items_create_data  # Nested create for items
+                    },
+                },
+                include={
+                    "order_items": {"include": {"game": True}}
+                },  # Include for response
+            )
+        except PrismaError as e:
+            logger.error(f"Prisma database error during order creation: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save order due to database error.",
+            )
+        except Exception as e:
+            logger.error(f"Unexpected error during order creation: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An unexpected error occurred while creating the order.",
+            )
 
-    # --- 4. Create Order Record ---
-    order_date = datetime.utcnow()
-    new_order = Order(
-        # user_id=user_id, # Assign if available
-        customer_email=order_in.customer_email,
-        customer_phone=order_in.customer_phone,
-        total_amount=total_amount,
-        status="processing",  # Initial status
-        order_date=order_date,
-    )
-    session.add(new_order)
-    session.flush()  # Flush to get the new_order.id before creating items
+        # --- 4. Clear Cart --- #
+        await clear_cart_for_user_prisma(user_id, transaction)
 
-    # --- 5. Create OrderItem Records ---
-    for item_data in order_items_to_create:
-        db_order_item = OrderItem(order_id=new_order.id, **item_data.model_dump())
-        session.add(db_order_item)
+    # --- Transaction committed successfully --- #
 
-    # --- 6. Generate Order ID String ---
-    # Simple example - replace with a robust unique ID generator
-    # Example: Generate a unique, harder-to-guess ID
-    # order_id_str = f"ORD-{uuid.uuid4().hex[:8].upper()}"
-    # Or just use the DB ID padded
-    order_id_str = f"#ORD{new_order.id:06d}"
+    # --- 5. Generate Order ID String --- #
+    order_id_str = f"#ORD{new_order.id.split('-')[0].upper()}"  # Use part of UUID
 
-    # --- 7. Clear Cart (Placeholder) ---
-    if user_id:
-        await clear_cart_for_user(user_id, session)
-    # Need logic for guest carts if applicable
-
-    # --- 8. Commit Transaction ---
-    try:
-        session.commit()
-        session.refresh(new_order)
-        # Refresh items if needed, but usually not necessary for response
-    except Exception as e:
-        session.rollback()
-        logger.error(f"Database error during order commit: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to save order.",
-        )
-
-    # --- 9. Send Confirmation Email ---
-    # Removed email sending logic due to incorrect import path
-    # email_details = {
-    #     "user_name": user_name,
-    #     "order_id": order_id_str,
-    #     "order_date": order_date.strftime("%d/%m/%Y"),  # Format date
-    #     "total_amount_formatted": format_currency(total_amount),
-    #     "items_list": email_items_list,
-    #     "customer_email": order_in.customer_email,
-    #     "customer_phone": order_in.customer_phone,
-    # }
-    # email_sent = send_order_confirmation_email(
-    #     to_email=order_in.customer_email, order_details=email_details
-    # )
-    # if not email_sent:
-    #     # Log error but don't fail the order placement itself maybe?
-    #     logger.error(
-    #         "Failed to send order confirmation email for order %s", order_id_str
-    #     )
-
-    # --- 10. Return Response ---
-    # Need to load items for the response model if it includes them
-    # Assuming OrderResponse schema can handle the ORM model directly
+    # --- 6. Send Confirmation Email (Placeholder/Removed) --- #
+    # Add email sending logic here if needed, outside the transaction
     logger.info(
-        "Order %s placed successfully for %s", order_id_str, order_in.customer_email
+        f"Order {order_id_str} ({new_order.id}) placed successfully for {order_in.customer_email}"
     )
-    return new_order  # FastAPI will convert using OrderResponse schema
+
+    # --- 7. Return Response --- #
+    # new_order already includes items and games due to `include` in create
+    # Validate against the local Pydantic model before returning
+    return OrderResponse.model_validate(new_order)
 
 
 @router.get(
     "/",
-    response_model=List[OrderResponseSchema],
+    response_model=List[OrderResponse],
     operation_id="OrderController_getMyOrders",
 )
 async def get_my_orders(
-    session: SessionDep,
+    db: DbDep,
     current_user: CurrentUser,
     skip: int = 0,
     limit: int = 100,
     status: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
-) -> List[Order]:
-    """
-    Retrieve the authenticated user's order history.
-    Supports pagination using skip and limit query parameters.
-    Supports filtering by status, start_date, and end_date.
-    """
+) -> List[OrderResponse]:
+    """Retrieve the authenticated user's order history using Prisma."""
+    user_id = current_user.id
     logger.info(
-        f"Fetching orders for user: {current_user.email}, skip: {skip}, limit: {limit}, "
+        f"Fetching orders for user: {user_id}, skip: {skip}, limit: {limit}, "
         f"status: {status}, start: {start_date}, end: {end_date}"
     )
 
-    # Start base query
-    query = (
-        select(Order)
-        .where(Order.user_id == current_user.id)
-        .order_by(Order.order_date.desc())  # type: ignore
+    where_clause = {"user_id": user_id}
+    if status:
+        where_clause["status"] = status
+    if start_date:
+        where_clause["order_date"] = {"gte": start_date}
+    if end_date:
+        # Add time component or adjust logic if needed for inclusive end date
+        if "order_date" in where_clause:
+            # If start_date was already set, add lte to the existing dict
+            where_clause["order_date"]["lte"] = end_date
+        else:
+            where_clause["order_date"] = {"lte": end_date}
+
+    orders = await db.order.find_many(
+        where=where_clause,
+        order_by={"order_date": "desc"},
+        skip=skip,
+        take=limit,
+        include={
+            "order_items": {"include": {"game": True}}
+        },  # Include details for response
     )
 
-    # Apply filters conditionally
-    if status:
-        query = query.where(Order.status == status)
-    if start_date:
-        query = query.where(Order.order_date >= start_date)
-    if end_date:
-        # Add time component to end_date for inclusive range, e.g., end of day
-        # Or adjust the comparison based on desired inclusivity (e.g., <= vs <)
-        # For simplicity here, we use < for the next day or >= for start_date
-        # A more robust approach might involve datetime manipulation
-        query = query.where(Order.order_date <= end_date)
-
-    # Apply pagination
-    query = query.offset(skip).limit(limit)
-
-    # Execute query
-    orders = session.exec(query).all()
-
-    if not orders:
-        logger.info(
-            f"No orders found for user: {current_user.email} with specified filters."
-        )
-        return []
-
-    logger.info(f"Found {len(orders)} orders for user: {current_user.email}")
-    return orders
+    # Validate each order against the local Pydantic model
+    return [OrderResponse.model_validate(order) for order in orders]
