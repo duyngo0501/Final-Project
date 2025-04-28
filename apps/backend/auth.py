@@ -10,10 +10,10 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 
-from app.config import settings
-from app.schemas.db_supabase import SupabaseUser
-from supabase._async.client import AsyncClient, create_client
+from config import settings
+from db_supabase import SupabaseUser
 from supabase import AsyncClientOptions
+from supabase._async.client import AsyncClient, create_client
 
 
 async def get_super_client() -> AsyncClient:
@@ -112,6 +112,5 @@ async def get_current_user(token: TokenDep, super_client: SuperClient) -> Supaba
         # Catch unexpected errors from Supabase client or other issues
         logging.error(f"Unexpected error validating token or getting user: {e}")
         raise HTTPException(
-            status_code=500,
-            detail="Internal server error during authentication",
+            status_code=500, detail="Internal server error during authentication"
         )

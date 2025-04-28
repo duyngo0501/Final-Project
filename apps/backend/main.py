@@ -5,35 +5,32 @@
 # REMOVE this bypass logic before production!
 # ----------------------
 
+# Remove sync service import for now as it depends on engine
+# from app.services.sync_service import sync_rawg_games
 import logging
+import traceback
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 
-
 import uvicorn
-from fastapi import FastAPI
-from fastapi.concurrency import asynccontextmanager
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from uvicorn.config import LOGGING_CONFIG
 
-# Remove Alembic imports
-# from alembic import command
-# from alembic.config import Config
-
-from app.routes.routers import api_router
-from app.config import Settings
-from app.core.middleware import TracebackMiddleware
-from app.utils import custom_generate_unique_id
+from config import Settings
 
 # Remove old engine import
 # from app.core.db import engine
 # Import Prisma connection handlers
-from app.core.db import connect_db, disconnect_db
+from db import connect_db, disconnect_db
+from middleware import TracebackMiddleware
 
-# Remove sync service import for now as it depends on engine
-# from app.services.sync_service import sync_rawg_games
-import asyncio
-from contextlib import asynccontextmanager
+# Remove Alembic imports
+# from alembic import command
+# from alembic.config import Config
+from routers import api_router
 
 # Remove individual router imports
 # from app.api.routes import (
@@ -96,10 +93,29 @@ app = FastAPI(
     lifespan=lifespan,
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    generate_unique_id_function=custom_generate_unique_id,
 )
 
+
+# Add custom exception handler for generic Exceptions
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    # Log the full traceback
+    tb_str = traceback.format_exception(exc=exc, etype=type(exc), tb=exc.__traceback__)
+    logger.error("Unhandled exception:", exc_info=exc)
+    # You could also log tb_str if exc_info=True isn't sufficient
+    # logger.error("\n".join(tb_str))
+
+    # Prepare response content
+    content = {"detail": "Internal Server Error"}
+    if settings.ENVIRONMENT == "local":  # Only include traceback in local env
+        content["traceback"] = tb_str
+
+    return JSONResponse(status_code=500, content=content)
+
+
 # Add TracebackMiddleware early in the stack
+# Note: The custom handler above might make this middleware redundant for logging,
+# but it might provide other functionality. Review middleware.py if needed.
 app.add_middleware(TracebackMiddleware)
 
 # Set all CORS enabled origins

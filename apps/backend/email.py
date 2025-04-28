@@ -139,10 +139,7 @@ def create_order_confirmation_html(order_data: dict[str, Any]) -> str:
     return html_content
 
 
-def send_order_confirmation_email(
-    to_email: str,
-    order_details: dict[str, Any],
-) -> bool:
+def send_order_confirmation_email(to_email: str, order_details: dict[str, Any]) -> bool:
     """Constructs and sends an order confirmation email.
 
     Generates the HTML body using `create_order_confirmation_html` and

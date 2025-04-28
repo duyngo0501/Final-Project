@@ -5,19 +5,10 @@ Handles loading settings from environment variables or .env files using Pydantic
 
 import secrets
 import warnings
-import os
-from pathlib import Path  # Import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import (
-    AnyUrl,
-    BeforeValidator,
-    Field,
-    computed_field,
-    model_validator,
-)
+from pydantic import AnyUrl, BeforeValidator, Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing_extensions import Self
 
 
 def parse_cors(v: Any) -> list[str] | str:
@@ -80,9 +71,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["local", "staging", "production"] = "local"
 
     # CORS Configuration
-    BACKEND_CORS_ORIGINS: Annotated[list[AnyUrl] | str, BeforeValidator(parse_cors)] = (
-        []
-    )
+    BACKEND_CORS_ORIGINS: Annotated[
+        list[AnyUrl] | str, BeforeValidator(parse_cors)
+    ] = []
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -99,10 +90,7 @@ class Settings(BaseSettings):
 
     # Supabase Configuration
     SUPABASE_URL: str = Field(default="", env="SUPABASE_URL")
-    SUPABASE_KEY: str = Field(
-        "",
-        env="SUPABASE_KEY",
-    )
+    SUPABASE_KEY: str = Field("", env="SUPABASE_KEY")
     # PostgreSQL Attributes
     POSTGRES_SERVER: str
     POSTGRES_PORT: int = 5432

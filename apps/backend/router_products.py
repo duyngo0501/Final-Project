@@ -1,17 +1,16 @@
-import uuid
-from typing import List, Any, Annotated, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Path
-from fastapi.routing import Request as FastAPIRequest
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field
+
+# Dependencies
+from deps import AdminUser, DbDep
+from prisma import Client as PrismaClient
 
 # Import Prisma errors, client and models
 from prisma.errors import PrismaError, RecordNotFoundError, UniqueViolationError
-from prisma import Client as PrismaClient
-from prisma.models import Game, Platform, Category
-
-# Dependencies
-from app.core.deps import DbDep, AdminUser
+from prisma.models import Category, Game, Platform
 
 # Remove old DAL import
 # from app.dal import crud_game
@@ -30,15 +29,15 @@ class CategoryItem(Category, BaseModel):
 
 
 class GameResponse(Game, BaseModel):
-    platforms: List[PlatformItem] = []
-    categories: List[CategoryItem] = []
+    platforms: list[PlatformItem] = []
+    categories: list[CategoryItem] = []
 
     class Config:
         from_attributes = True
 
 
 class GameListingResponse(BaseModel):
-    items: List[GameResponse]
+    items: list[GameResponse]
     total: int
     page: int
     limit: int
@@ -47,10 +46,10 @@ class GameListingResponse(BaseModel):
 
 class GameCreateSchema(BaseModel):
     name: str = Field(..., examples=["Cyberpunk 2077"])
-    description: Optional[str] = Field(None, examples=["An open-world action RPG."])
-    price: Optional[float] = Field(None, examples=[59.99])
-    released_date: Optional[datetime] = Field(None, examples=["2020-12-10T00:00:00Z"])
-    background_image: Optional[str] = Field(
+    description: str | None = Field(None, examples=["An open-world action RPG."])
+    price: float | None = Field(None, examples=[59.99])
+    released_date: datetime | None = Field(None, examples=["2020-12-10T00:00:00Z"])
+    background_image: str | None = Field(
         None, examples=["https://example.com/image.jpg"]
     )
 
@@ -86,10 +85,10 @@ async def list_products(
     db: PrismaClient = Depends(DbDep),
     skip: int = 0,
     limit: int = 10,
-    search: Optional[str] = None,
-    category: Optional[List[str]] = None,
-    platform: Optional[List[str]] = None,
-    sort_by: Optional[str] = None,
+    search: str | None = None,
+    category: list[str] | None = None,
+    platform: list[str] | None = None,
+    sort_by: str | None = None,
     is_asc: bool = True,
 ) -> GameListingResponse:
     """
@@ -190,10 +189,7 @@ async def create_product_endpoint(
     operation_id="ProductController_deleteProduct",
 )
 async def delete_product_endpoint(
-    *,
-    db: PrismaClient = Depends(DbDep),
-    product_id: str,
-    admin_user: AdminUser,
+    *, db: PrismaClient = Depends(DbDep), product_id: str, admin_user: AdminUser
 ) -> None:
     """
     Delete a product/game by its ID (Admin only).
@@ -226,8 +222,7 @@ async def get_product_details(
     """Retrieves detailed game info including platforms/categories using Prisma."""
     try:
         db_game = await db.game.find_unique(
-            where={"id": product_id},
-            include={"platforms": True, "categories": True},
+            where={"id": product_id}, include={"platforms": True, "categories": True}
         )
     except PrismaError as e:
         raise HTTPException(

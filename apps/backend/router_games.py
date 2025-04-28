@@ -1,93 +1,22 @@
-import uuid
-from typing import List, Any, Annotated, Optional
 from datetime import datetime  # Add datetime for Pydantic models
-from app.core.db import get_db
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Path
-from fastapi.routing import Request as FastAPIRequest
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field  # Import BaseModel and Field
+
+from db import get_db
+
+# Dependencies
+from deps import AdminUser, DbDep  # DbDep should now provide Prisma Client
+from prisma import Client as PrismaClient  # Import Prisma client type
 
 # Import Prisma errors and client type
 from prisma.errors import PrismaError, RecordNotFoundError, UniqueViolationError
-from prisma import Client as PrismaClient  # Import Prisma client type
 from prisma.models import Game  # Import Prisma-generated models
-
-# Dependencies
-from app.core.deps import DbDep, AdminUser  # DbDep should now provide Prisma Client
-
-# CRUD - Remove DAL import
-# from app.dal import crud_game
-
-# Models & Schemas - Use renamed schemas from db_game
-
-# from app.schemas.db_game import GameReadSchema # Update commented import
-# from app.schemas.game import GameReadSchema
-
-# Remove unused import
-# from app.services.game_api_client import get_rawg_games
-
-# --- Define Local Pydantic Models Inheriting from Prisma Models ---
-
-
-# Remove PlatformItem
-# class PlatformItem(
-#     Platform, BaseModel
-# ):  # Inherit from Prisma Platform and Pydantic BaseModel
-#     # Fields are inherited from prisma.models.Platform
-#     # id: str
-#     # name: str
-#
-#     class Config:
-#         from_attributes = True
-
-
-# Remove CategoryItem
-# class CategoryItem(
-#     Category, BaseModel
-# ):  # Inherit from Prisma Category and Pydantic BaseModel
-#     # Fields are inherited from prisma.models.Category
-#     # id: str
-#     # name: str
-#
-#     class Config:
-#         from_attributes = True
-
-
-class GameWithRelations(
-    Game, BaseModel
-):  # Inherit from Prisma Game and Pydantic BaseModel
-    # Most fields are inherited from prisma.models.Game
-    # id: str
-    # name: str
-    # slug: Optional[str] = None
-    # description: Optional[str] = None
-    # metacritic: Optional[int] = None
-    # released_date: Optional[datetime] = None
-    # background_image: Optional[str] = None
-    # website: Optional[str] = None
-    # rating: Optional[float] = None
-    # rating_top: Optional[int] = None
-    # ratings_count: Optional[int] = None
-    # reviews_text_count: Optional[int] = None
-    # added: Optional[int] = None
-    # suggestions_count: Optional[int] = None
-    # updated_at: Optional[datetime] = None
-    # reviews_count: Optional[int] = None
-    # saturated_color: Optional[str] = None
-    # dominant_color: Optional[str] = None
-    # price: Optional[float] = None
-    # created_at: datetime
-
-    # Explicitly define relation fields with the correct Pydantic types
-    # Remove platforms and categories
-    # platforms: List[PlatformItem] = []
-    # categories: List[CategoryItem] = []
-
-    class Config:
-        from_attributes = True  # Enable ORM mode
 
 
 class GameListingResponse(BaseModel):
-    items: List[GameWithRelations]
+    items: list[Game]
     total: int
     page: int
     limit: int
@@ -97,10 +26,10 @@ class GameListingResponse(BaseModel):
 class GameCreateSchema(BaseModel):
     # Define fields required to create a game - adjust based on your actual needs
     name: str = Field(..., examples=["Cyberpunk 2077"])
-    description: Optional[str] = Field(None, examples=["An open-world action RPG."])
-    price: Optional[float] = Field(None, examples=[59.99])
-    released_date: Optional[datetime] = Field(None, examples=["2020-12-10T00:00:00Z"])
-    background_image: Optional[str] = Field(
+    description: str | None = Field(None, examples=["An open-world action RPG."])
+    price: float | None = Field(None, examples=[59.99])
+    released_date: datetime | None = Field(None, examples=["2020-12-10T00:00:00Z"])
+    background_image: str | None = Field(
         None, examples=["https://example.com/image.jpg"]
     )
     # Add other necessary fields like rating, metacritic, etc.
@@ -167,10 +96,7 @@ async def list_games(
     try:
         total = await db.game.count(where=where_clause)
         items = await db.game.find_many(
-            where=where_clause,
-            skip=skip,
-            take=limit,
-            order=order_by,
+            where=where_clause, skip=skip, take=limit, order=order_by
         )
         pages = (total + limit - 1) // limit if limit > 0 else 0
 
@@ -215,9 +141,7 @@ async def create_game_endpoint(
         data_to_create = game_in.model_dump(exclude_unset=True)
         # If GameCreateSchema includes platform/category names or IDs,
         # you'd need logic here to connect them during creation.
-        new_game_prisma = await db.game.create(
-            data=data_to_create,
-        )
+        new_game_prisma = await db.game.create(data=data_to_create)
     except UniqueViolationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -243,10 +167,7 @@ async def create_game_endpoint(
     operation_id="GameController_deleteGame",
 )
 async def delete_game_endpoint(
-    *,
-    db: PrismaClient = Depends(DbDep),
-    game_id: str,
-    admin_user: AdminUser,
+    *, db: PrismaClient = Depends(DbDep), game_id: str, admin_user: AdminUser
 ):
     """Delete a game by its local ID."""
     try:
@@ -282,9 +203,7 @@ async def get_game_details(
 ):
     """Retrieves detailed game info including platforms/categories as raw Prisma object."""
     try:
-        db_game = await db.game.find_unique(
-            where={"id": game_id},
-        )
+        db_game = await db.game.find_unique(where={"id": game_id})
     except PrismaError as e:
         raise HTTPException(
             status_code=500, detail=f"Database error fetching game details: {e}"
@@ -302,24 +221,27 @@ async def get_game_details(
     return GameWithRelations.model_validate(db_game)
 
 
-# Keep the existing sync_rawg endpoint (ensure it uses Prisma client if needed)
-@router.post(
-    "/sync-rawg",
-    response_model=SyncResponse,  # ADDED back with local model
-    dependencies=[Depends(AdminUser)],
-    operation_id="GameController_syncRawg",
-    summary="Sync Games from RAWG",
-    description="Fetch games from the RAWG API and store them in the database. Admin access required.",
-)
-async def sync_rawg(
-    db: PrismaClient = Depends(DbDep),
-    pages: int = 1,
-):
-    """Fetch games from RAWG API and sync to DB."""
-    try:
-        sync_results = await fetch_games_from_rawg(db_session=db, pages_to_fetch=pages)
-        # Ensure the return value matches the SyncResponse model
-        return SyncResponse(status="Sync initiated", results=sync_results)
-    except Exception as e:
-        # Log the exception e
-        raise HTTPException(status_code=500, detail=f"Error during RAWG sync: {str(e)}")
+# --- Comment out the non-functional /sync-rawg endpoint ---
+# @router.post(
+#     "/sync-rawg",
+#     response_model=SyncResponse,  # ADDED back with local model
+#     dependencies=[Depends(AdminUser)],
+#     operation_id="GameController_syncRawg",
+#     summary="Sync Games from RAWG",
+#     description="Fetch games from the RAWG API and store them in the database. Admin access required.",
+# )
+# async def sync_rawg(
+#     db: PrismaClient = Depends(DbDep),
+#     pages: int = 1,
+# ):
+#     """Fetch games from the RAWG API and store them in the database."""
+#     try:
+#         # Call the (currently missing) service function
+#         # sync_results = await fetch_games_from_rawg(db_session=db, pages_to_fetch=pages)
+#         sync_results = {"status": "success", "results": "Sync logic needs implementation"}
+#         return SyncResponse(status="success", results=sync_results)
+#     except Exception as e:
+#         logger.error(f"Error during RAWG sync: {e}")
+#         raise HTTPException(
+#             status_code=500, detail=f"Failed to sync games from RAWG: {e}"
+#         )

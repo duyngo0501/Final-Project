@@ -1,6 +1,7 @@
-import requests
 import uuid
 from datetime import datetime, timedelta
+
+import requests
 
 # --- Configuration ---
 BASE_URL = "http://localhost:8000/api/v1"  # Adjust if your base URL differs

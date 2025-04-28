@@ -1,15 +1,14 @@
 import logging
-import uuid
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from prisma import Prisma
-from prisma.models import Order, OrderItem, Game
-from prisma.errors import PrismaError, RecordNotFoundError
 
-from app.core.deps import DbDep, CurrentUser
+from deps import CurrentUser, DbDep
+from prisma import Prisma
+from prisma.errors import PrismaError
+from prisma.models import Game, Order, OrderItem
 
 # --- Define Local Pydantic Models ---
 
@@ -22,7 +21,7 @@ class GameItem(Game, BaseModel):
 
 class OrderItemResponse(OrderItem, BaseModel):
     # Fields like id, order_id, game_id, quantity, price_at_purchase inherited
-    game: Optional[GameItem] = None
+    game: GameItem | None = None
 
     class Config:
         from_attributes = True
@@ -30,7 +29,7 @@ class OrderItemResponse(OrderItem, BaseModel):
 
 class OrderResponse(Order, BaseModel):
     # Fields like id, user_id, status, total_amount, order_date inherited
-    order_items: List[OrderItemResponse] = []
+    order_items: list[OrderItemResponse] = []
 
     class Config:
         from_attributes = True
@@ -45,7 +44,7 @@ class OrderCreate(BaseModel):
     # except maybe contact info if not tied to user profile.
     # This schema might be simplified depending on actual API contract.
     customer_email: str = Field(..., examples=["customer@example.com"])
-    customer_phone: Optional[str] = Field(None, examples=["123-456-7890"])
+    customer_phone: str | None = Field(None, examples=["123-456-7890"])
     # Other fields like address might be added here if needed
 
 
@@ -61,7 +60,7 @@ router = APIRouter()
 
 async def get_cart_items_for_user_prisma(
     user_id: str, db: Prisma
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Fetches cart items and formats them for order creation using Prisma."""
     try:
         cart = await db.shoppingcart.find_unique(
@@ -241,9 +240,7 @@ async def create_order(
 
 
 @router.get(
-    "/",
-    response_model=List[OrderResponse],
-    operation_id="OrderController_getMyOrders",
+    "/", response_model=list[OrderResponse], operation_id="OrderController_getMyOrders"
 )
 async def get_my_orders(
     db: DbDep,
@@ -253,7 +250,7 @@ async def get_my_orders(
     status: str | None = None,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
-) -> List[OrderResponse]:
+) -> list[OrderResponse]:
     """Retrieve the authenticated user's order history using Prisma."""
     user_id = current_user.id
     logger.info(

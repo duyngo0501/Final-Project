@@ -1,31 +1,31 @@
 """Shared FastAPI Dependencies"""
 
-from collections.abc import Generator
-from typing import Annotated
 import os
+from typing import Annotated
 
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, Request, status
+
+# Import settings to access ADMIN_EMAIL (Keep if still needed)
+# Corrected import: Changed path
+# Use rich print for logging (Keep if still needed)
+from rich import print
+
+# Corrected import: Changed relative to direct import
+from auth import get_current_user
+
+# Remove old engine import
+# from .db import engine
+# Import the new get_db function from app.core.db
+# Corrected import: Changed relative to direct import
+from db import (
+    get_db as get_prisma_db,
+)  # Rename to avoid potential name clash if old get_db was used elsewhere
+from db_supabase import SupabaseUser  # Corrected import path for SupabaseUser
 
 # Remove SQLModel Session import
 # from sqlmodel import Session
 # Import Prisma
 from prisma import Prisma
-
-from .auth import get_current_user
-from app.schemas.db_supabase import SupabaseUser
-
-# Remove old engine import
-# from .db import engine
-# Import the new get_db function from app.core.db
-from .db import (
-    get_db as get_prisma_db,
-)  # Rename to avoid potential name clash if old get_db was used elsewhere
-
-# Import settings to access ADMIN_EMAIL (Keep if still needed)
-from app.config import settings
-
-# Use rich print for logging (Keep if still needed)
-from rich import print
 
 # Dependency type hint for Prisma client instance
 # Rename SessionDep to DbDep or PrismaDep for clarity
@@ -69,7 +69,7 @@ async def get_current_admin_user(
 
     # Update admin check logic
     # Check for 'claims_admin' in app_metadata (adjust key if necessary)
-    if not current_user.app_metadata.get("claims_admin") is True:
+    if current_user.app_metadata.get("claims_admin") is not True:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The user doesn't have enough privileges",

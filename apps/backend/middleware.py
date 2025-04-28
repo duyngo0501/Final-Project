@@ -5,8 +5,8 @@ Includes middleware for handling exceptions and providing tracebacks.
 
 import traceback
 
-from fastapi import Request, HTTPException
-from fastapi.responses import PlainTextResponse, JSONResponse
+from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse, PlainTextResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 

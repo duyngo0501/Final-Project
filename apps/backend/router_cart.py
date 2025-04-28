@@ -1,18 +1,14 @@
-import uuid
-from typing import List, Optional  # Added Optional
-from datetime import datetime  # Add datetime for Pydantic models
-
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field  # Import BaseModel and Field
+
+from deps import CurrentUser, DbDep  # Changed SessionDep
 from prisma import Prisma  # Import Prisma
 
 # Import Prisma errors for specific handling
 from prisma.errors import PrismaError, RecordNotFoundError
 
 # Import Prisma Models for inheritance and type hints
-from prisma.models import ShoppingCart, CartEntry, Game
-
-from app.core.deps import CurrentUser, DbDep  # Changed SessionDep
+from prisma.models import CartEntry, Game, ShoppingCart
 
 # --- Define Local Pydantic Models ---
 
@@ -25,7 +21,7 @@ class GameItem(Game, BaseModel):  # Inherit from Prisma Game
 
 class CartItemResponse(CartEntry, BaseModel):  # Inherit from Prisma CartEntry
     # Fields like id, shopping_cart_id, game_id, quantity are inherited
-    game: Optional[GameItem] = None  # Explicitly define the relation type
+    game: GameItem | None = None  # Explicitly define the relation type
 
     class Config:
         from_attributes = True
@@ -33,7 +29,7 @@ class CartItemResponse(CartEntry, BaseModel):  # Inherit from Prisma CartEntry
 
 class CartResponse(ShoppingCart, BaseModel):  # Inherit from Prisma ShoppingCart
     # Fields like id, user_id, created_at, updated_at are inherited
-    items: List[CartItemResponse] = []  # Explicitly define the relation type
+    items: list[CartItemResponse] = []  # Explicitly define the relation type
 
     class Config:
         from_attributes = True
@@ -82,7 +78,8 @@ async def get_or_create_cart_prisma(
 
 @router.get("/", response_model=CartResponse, operation_id="CartController_getCart")
 async def read_cart(
-    db: DbDep, current_user: CurrentUser  # Changed session to db
+    db: DbDep,
+    current_user: CurrentUser,  # Changed session to db
 ) -> CartResponse:  # Update return type hint
     """Retrieve the current user's shopping cart using Prisma.
 
@@ -146,10 +143,7 @@ async def add_item_to_cart(
 
         # Find existing item first approach:
         existing_item = await db.cart_entry.find_first(
-            where={
-                "shopping_cart_id": user_cart.id,
-                "game_id": game_id,
-            }
+            where={"shopping_cart_id": user_cart.id, "game_id": game_id}
         )
 
         if existing_item:
@@ -213,10 +207,7 @@ async def update_cart_item_quantity(
 
         # Find the specific item
         item_to_update = await db.cart_entry.find_first(
-            where={
-                "shopping_cart_id": user_cart.id,
-                "game_id": game_id,
-            }
+            where={"shopping_cart_id": user_cart.id, "game_id": game_id}
         )
 
         if not item_to_update:
@@ -246,9 +237,7 @@ async def update_cart_item_quantity(
     operation_id="CartController_removeItem",
 )
 async def remove_item_from_cart(
-    game_id: str,
-    db: DbDep,
-    current_user: CurrentUser,
+    game_id: str, db: DbDep, current_user: CurrentUser
 ) -> None:
     """Remove an item from the shopping cart using Prisma."""
     user_id = current_user.id
@@ -262,10 +251,7 @@ async def remove_item_from_cart(
 
         # Find the item within the user's cart
         item_to_delete = await db.cart_entry.find_first(
-            where={
-                "shopping_cart_id": user_cart.id,
-                "game_id": game_id,
-            }
+            where={"shopping_cart_id": user_cart.id, "game_id": game_id}
         )
 
         if not item_to_delete:
@@ -291,9 +277,7 @@ async def remove_item_from_cart(
 
 
 @router.delete(
-    "/",
-    status_code=status.HTTP_204_NO_CONTENT,
-    operation_id="CartController_clearCart",
+    "/", status_code=status.HTTP_204_NO_CONTENT, operation_id="CartController_clearCart"
 )
 async def clear_cart(db: DbDep, current_user: CurrentUser) -> None:
     """Clear all items from the user's shopping cart using Prisma."""

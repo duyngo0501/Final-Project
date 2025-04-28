@@ -1,21 +1,14 @@
-import uuid
-from typing import List, Any, Optional
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+
+# Dependencies
+from deps import AdminUser, DbDep
 
 # Import Prisma errors
 from prisma.errors import PrismaError, RecordNotFoundError
 
 # Import Prisma model for inheritance
 from prisma.models import Blog
-
-# Dependencies
-from app.core.deps import (
-    DbDep,  # New Prisma dependency
-    AdminUser,
-    CurrentUser,
-)
 
 # --- Define Local Pydantic Models ---
 
@@ -35,8 +28,8 @@ class BlogCreate(BaseModel):
 
 
 class BlogUpdate(BaseModel):
-    title: Optional[str] = Field(None, examples=["Updated Blog Post Title"])
-    content: Optional[str] = Field(None, examples=["Updated content..."])
+    title: str | None = Field(None, examples=["Updated Blog Post Title"])
+    content: str | None = Field(None, examples=["Updated content..."])
 
 
 router = APIRouter()
@@ -51,11 +44,7 @@ router = APIRouter()
     dependencies=[Depends(AdminUser)],
     operation_id="BlogController_createBlogPost",
 )
-async def create_blog_post(
-    *,
-    db: DbDep,
-    blog_in: BlogCreate,
-) -> BlogResponse:
+async def create_blog_post(*, db: DbDep, blog_in: BlogCreate) -> BlogResponse:
     """
     Create a new blog post (Admin only).
     """
@@ -71,13 +60,11 @@ async def create_blog_post(
 
 
 @router.get(
-    "/", response_model=List[BlogResponse], operation_id="BlogController_readBlogPosts"
+    "/", response_model=list[BlogResponse], operation_id="BlogController_readBlogPosts"
 )
 async def read_blog_posts(
-    db: DbDep,
-    skip: int = 0,
-    limit: int = 100,
-) -> List[BlogResponse]:
+    db: DbDep, skip: int = 0, limit: int = 100
+) -> list[BlogResponse]:
     """
     Retrieve a list of blog posts.
     """
@@ -98,11 +85,7 @@ async def read_blog_posts(
     response_model=BlogResponse,
     operation_id="BlogController_readBlogPost",
 )
-async def read_blog_post(
-    *,
-    db: DbDep,
-    post_id: str,
-) -> BlogResponse:
+async def read_blog_post(*, db: DbDep, post_id: str) -> BlogResponse:
     """
     Get a single blog post by its ID.
     """
@@ -128,10 +111,7 @@ async def read_blog_post(
     operation_id="BlogController_updateBlogPost",
 )
 async def update_blog_post(
-    *,
-    db: DbDep,
-    post_id: str,
-    blog_in: BlogUpdate,
+    *, db: DbDep, post_id: str, blog_in: BlogUpdate
 ) -> BlogResponse:
     """
     Update a blog post by ID (Admin only).
@@ -157,11 +137,7 @@ async def update_blog_post(
     dependencies=[Depends(AdminUser)],
     operation_id="BlogController_deleteBlogPost",
 )
-async def delete_blog_post(
-    *,
-    db: DbDep,
-    post_id: str,
-) -> None:
+async def delete_blog_post(*, db: DbDep, post_id: str) -> None:
     """
     Delete a blog post by ID (Admin only).
     """

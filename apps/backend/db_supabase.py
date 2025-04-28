@@ -1,8 +1,8 @@
 """Pydantic Schemas for Supabase Interactions"""
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional
 import uuid
+from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -12,33 +12,32 @@ class SupabaseUser(BaseModel):
 
     id: uuid.UUID = Field(..., description="User's unique Supabase ID (UUID)")
     aud: str = Field(..., description="Audience of the JWT")
-    role: Optional[str] = Field(None, description="User's role (e.g., 'authenticated')")
-    email: Optional[EmailStr] = Field(None, description="User's email address")
-    email_confirmed_at: Optional[datetime] = Field(
+    role: str | None = Field(None, description="User's role (e.g., 'authenticated')")
+    email: EmailStr | None = Field(None, description="User's email address")
+    email_confirmed_at: datetime | None = Field(
         None, description="Timestamp when the email was confirmed"
     )
-    phone: Optional[str] = Field(None, description="User's phone number")
-    phone_confirmed_at: Optional[datetime] = Field(
+    phone: str | None = Field(None, description="User's phone number")
+    phone_confirmed_at: datetime | None = Field(
         None, description="Timestamp when the phone was confirmed"
     )
-    confirmed_at: Optional[datetime] = Field(
+    confirmed_at: datetime | None = Field(
         None, description="Timestamp when the user was confirmed (if applicable)"
     )
-    last_sign_in_at: Optional[datetime] = Field(
+    last_sign_in_at: datetime | None = Field(
         None, description="Timestamp of the last sign-in"
     )
-    app_metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Non-sensitive application-specific metadata",
+    app_metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Non-sensitive application-specific metadata"
     )
-    user_metadata: Dict[str, Any] = Field(
+    user_metadata: dict[str, Any] = Field(
         default_factory=dict, description="User-specific metadata"
     )
-    identities: Optional[List[Dict[str, Any]]] = Field(
+    identities: list[dict[str, Any]] | None = Field(
         None, description="User's identities (e.g., email, google)"
     )
     created_at: datetime = Field(..., description="Timestamp when the user was created")
-    updated_at: Optional[datetime] = Field(
+    updated_at: datetime | None = Field(
         None, description="Timestamp when the user was last updated"
     )
 

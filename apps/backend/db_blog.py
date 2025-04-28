@@ -1,6 +1,5 @@
-import uuid
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -8,8 +7,8 @@ from pydantic import BaseModel
 class BlogBase(BaseModel):
     title: str
     author: str  # Consider linking to user ID later
-    date: Optional[datetime] = None  # Use datetime, make optional or default
-    excerpt: Optional[str] = None
+    date: datetime | None = None  # Use datetime, make optional or default
+    excerpt: str | None = None
     content: str
 
 
@@ -20,11 +19,11 @@ class BlogCreate(BlogBase):
 
 # Schema for updating a blog post (all fields optional)
 class BlogUpdate(BaseModel):
-    title: Optional[str] = None
-    author: Optional[str] = None
-    date: Optional[datetime] = None
-    excerpt: Optional[str] = None
-    content: Optional[str] = None
+    title: str | None = None
+    author: str | None = None
+    date: datetime | None = None
+    excerpt: str | None = None
+    content: str | None = None
 
 
 # Schema for returning blog post data to the client (includes ID)

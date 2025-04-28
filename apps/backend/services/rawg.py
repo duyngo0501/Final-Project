@@ -1,17 +1,18 @@
-import requests
-import os
-import logging
-import json
-from typing import Optional, Dict, Any, List, Set
-from datetime import datetime
 import asyncio
+import json
+import logging
+import os
 import random  # Import random module
+from datetime import datetime
+from typing import Any
+
+import requests
 
 # --- Prisma Imports (Add these) ---
 # Assuming your Prisma client is accessible via app.core.db
 # Adjust the import path if necessary
-from app.core.db import prisma, connect_db, disconnect_db
 from prisma.errors import PrismaError, UniqueViolationError
+from prisma.models import Game
 
 # --- End Prisma Imports ---
 
@@ -33,43 +34,6 @@ CACHE_FILE = "rawg_visited_pages.json"
 # --- End Cache Config ---
 
 
-# --- Cache Functions (Add these) ---
-def load_visited_pages() -> Set[int]:
-    """Loads the set of visited page numbers from the cache file."""
-    try:
-        if os.path.exists(CACHE_FILE):
-            with open(CACHE_FILE, "r") as f:
-                data = json.load(f)
-                # Ensure data is a list of integers before converting to set
-                if isinstance(data, list) and all(
-                    isinstance(item, int) for item in data
-                ):
-                    return set(data)
-                else:
-                    logging.warning(
-                        f"Cache file {CACHE_FILE} has invalid format. Starting fresh."
-                    )
-                    return set()
-        else:
-            return set()
-    except (IOError, json.JSONDecodeError) as e:
-        logging.error(f"Error loading cache file {CACHE_FILE}: {e}. Starting fresh.")
-        return set()
-
-
-def save_visited_pages(visited: Set[int]):
-    """Saves the set of visited page numbers to the cache file."""
-    try:
-        with open(CACHE_FILE, "w") as f:
-            # Convert set to list for JSON serialization
-            json.dump(list(visited), f)
-    except IOError as e:
-        logging.error(f"Error saving cache file {CACHE_FILE}: {e}")
-
-
-# --- End Cache Functions ---
-
-
 # --- RAWG.io API Client ---
 
 
@@ -77,11 +41,11 @@ def get_rawg_games(
     api_key: str = RAWG_API_KEY,
     page: int = 1,
     page_size: int = 20,
-    ordering: Optional[str] = None,
-    search: Optional[str] = None,
-    genres: Optional[str] = None,
-    platforms: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    ordering: str | None = None,
+    search: str | None = None,
+    genres: str | None = None,
+    platforms: str | None = None,
+) -> dict[str, Any] | None:
     """
     Fetches games from the RAWG.io API with optional filters.
 
@@ -102,11 +66,7 @@ def get_rawg_games(
         logging.error("RAWG API key is missing.")
         return None
 
-    params = {
-        "key": api_key,
-        "page": page,
-        "page_size": page_size,
-    }
+    params = {"key": api_key, "page": page, "page_size": page_size}
     if ordering:
         params["ordering"] = ordering
     if search:
@@ -141,9 +101,7 @@ def get_rawg_games(
 
 
 # --- Crawling and Storing Logic (BULK REFACTORED function) ---
-async def crawl_and_store_rawg_games(
-    max_pages: Optional[int] = None, page_size: int = 40
-):
+async def crawl_and_store_rawg_games(max_pages: int | None = None, page_size: int = 40):
     """
     Crawls games from the RAWG API, stores them in the database with relations
     using bulk operations for related entities, and caches visited pages.
@@ -282,10 +240,7 @@ async def crawl_and_store_rawg_games(
                 # --- 4b. Upsert Game ---
                 game_in_db = await prisma.game.upsert(
                     where={"rawg_id": rawg_id},
-                    data={
-                        "create": game_payload_create,
-                        "update": game_payload_update,
-                    },
+                    data={"create": game_payload_create, "update": game_payload_update},
                 )
                 db_game_id = game_in_db.id
 
