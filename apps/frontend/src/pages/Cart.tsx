@@ -1,30 +1,28 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
-import { Game } from "@/types/game";
 import {
   Button,
   Spin,
   Alert,
   Empty,
-  InputNumber,
   Typography,
   Space,
-  Image,
   Card,
   List,
   message,
   Row,
   Divider,
 } from "antd";
-import { DeleteOutlined, ShoppingCartOutlined } from "@ant-design/icons";
+import { ShoppingCartOutlined } from "@ant-design/icons";
+import CartItemComponent from "@/components/cart/CartItem";
 
 const { Title, Text } = Typography;
 
 /**
  * Cart component displaying the user's shopping cart.
  * Uses Ant Design components and fetches state from CartContext using useCart hook.
- * REFRACTORED to use useCart hook with selectors.
+ * REFRACTORED to use useCart hook with selectors and CartItem component.
  * @returns {JSX.Element} The rendered cart component.
  */
 const Cart = (): JSX.Element => {
@@ -36,43 +34,23 @@ const Cart = (): JSX.Element => {
   const isMutating = useCart((state) => state.isMutating);
   const error = useCart((state) => state.error);
   const totalItems = useCart((state) => state.totalItems);
-  // Select actions
-  const removeItem = useCart((state) => state.removeItem);
-  const updateQuantity = useCart((state) => state.updateQuantity);
   const clearCart = useCart((state) => state.clearCart);
 
   // If cartItems is undefined (initial state before cart is loaded), treat as empty
   const items = cartItems ?? [];
 
-  // Recalculate totalPrice - Remove dependency on item.game
-  // NOTE: This might become inaccurate if cart object doesn't include total directly
-  // We might need to fetch product details separately or adjust context value
-  const totalPrice = useCart((state) => state.cart?.total_price ?? 0); // Assuming total_price exists on cart
-
-  // --- Action Handlers ---
-  // Pass game_id directly
-  const handleQuantityChange = async (gameId: string, quantity: number) => {
-    if (!quantity || quantity < 1) return;
-    try {
-      await updateQuantity(gameId, quantity);
-      message.success("Quantity updated");
-    } catch (err) {
-      message.error("Failed to update quantity");
-      console.error("Update quantity error:", err);
-    }
-  };
-
-  // Pass game_id directly
-  const handleRemoveItem = async (gameId: string) => {
-    try {
-      await removeItem(gameId);
-      // Removed title from success message as it's not available
-      message.success(`Item removed from cart`);
-    } catch (err) {
-      message.error("Failed to remove item");
-      console.error("Remove item error:", err);
-    }
-  };
+  // Recalculate total price locally
+  const totalPrice = useMemo(() => {
+    console.log("[Cart.tsx] Recalculating totalPrice. Items:", items);
+    return items.reduce((sum, item) => {
+      // Access price via nested game object, handle potential null/undefined
+      const price = item.game?.price ?? 0;
+      console.log(
+        `[Cart.tsx] Item ID: ${item.id}, Game Price: ${item.game?.price}, Quantity: ${item.quantity}, Calculated Price: ${price}`
+      );
+      return sum + price * item.quantity;
+    }, 0);
+  }, [items]);
 
   const handleClearCart = async () => {
     try {
@@ -147,73 +125,13 @@ const Cart = (): JSX.Element => {
       <List
         itemLayout="horizontal"
         dataSource={items}
-        renderItem={(item) => {
-          // Use game_id as key and for display purposes
-          const gameId = String(item.game_id);
-          const itemSubtotal = (item.price_at_purchase ?? 0) * item.quantity; // Assuming price_at_purchase exists
-
-          return (
-            <List.Item
-              key={gameId}
-              className="bg-white p-4 rounded-lg shadow mb-4"
-              actions={[
-                <InputNumber
-                  key="quantity"
-                  min={1}
-                  max={10}
-                  value={item.quantity}
-                  onChange={(value) => handleQuantityChange(gameId, value ?? 1)}
-                  style={{ width: 60 }}
-                  disabled={isMutating}
-                  aria-label={`Quantity for item ${gameId}`}
-                />,
-                <Text
-                  strong
-                  key="subtotal"
-                  style={{ minWidth: 80, textAlign: "right" }}
-                >
-                  {/* Display calculated item subtotal if available */}$
-                  {itemSubtotal.toFixed(2)}
-                </Text>,
-                <Button
-                  key="remove"
-                  type="text"
-                  danger
-                  icon={<DeleteOutlined />}
-                  onClick={() => handleRemoveItem(gameId)} // Pass gameId directly
-                  disabled={isMutating}
-                  aria-label={`Remove item ${gameId}`}
-                />,
-              ]}
-            >
-              <List.Item.Meta
-                avatar={
-                  <Image
-                    width={80}
-                    height={80}
-                    // Generic placeholder image
-                    src={`https://cataas.com/cat/says/item-${gameId}?width=80&height=80`}
-                    alt={`Item ${gameId}`}
-                    preview={false}
-                    style={{ objectFit: "cover", borderRadius: "4px" }}
-                    fallback="https://via.placeholder.com/80?text=Item"
-                  />
-                }
-                // Display game_id instead of title
-                title={`Item ID: ${gameId}`}
-                // Display price_at_purchase if available
-                description={`Price: $${(item.price_at_purchase ?? 0).toFixed(2)} each`}
-              />
-            </List.Item>
-          );
-        }}
+        renderItem={(item) => <CartItemComponent item={item} key={item.id} />}
       />
 
       <Card className="mt-8 shadow">
         <Space direction="vertical" style={{ width: "100%" }} size="middle">
           <Row justify="space-between">
             <Text>Subtotal ({totalItems} items)</Text>
-            {/* Assuming totalPrice from context is accurate */}
             <Text strong>${totalPrice.toFixed(2)}</Text>
           </Row>
           <Divider style={{ margin: "12px 0" }} />
@@ -229,8 +147,8 @@ const Cart = (): JSX.Element => {
             type="primary"
             size="large"
             block
-            onClick={() => navigate("/checkout")} // Navigate to checkout
-            disabled={items.length === 0 || isMutating} // Disable if empty or mutating
+            onClick={() => navigate("/checkout")}
+            disabled={items.length === 0 || isMutating}
             style={{ marginTop: 16 }}
           >
             Proceed to Checkout
@@ -240,7 +158,7 @@ const Cart = (): JSX.Element => {
             danger
             block
             onClick={handleClearCart}
-            disabled={isMutating || items.length === 0} // Disable if empty or mutating
+            disabled={isMutating || items.length === 0}
             loading={isMutating}
           >
             Clear Cart

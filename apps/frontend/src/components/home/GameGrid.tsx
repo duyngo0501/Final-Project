@@ -1,7 +1,7 @@
 import React from "react";
 import { Row, Col, Card, Button, Typography, Image, Tag } from "antd";
 import { ShoppingCartOutlined } from "@ant-design/icons";
-import { GameWithRelations } from "@/gen/types"; // USE GameWithRelations
+import { Game } from "@/gen/types"; // USE GameWithRelations
 import GameCard from "@/components/game/GameCard"; // <-- Import GameCard
 import AutoSizer from "react-virtualized-auto-sizer"; // Import AutoSizer
 import {
@@ -14,7 +14,7 @@ const { Meta } = Card;
 const { Text, Paragraph } = Typography;
 
 interface GameGridProps {
-  games: GameWithRelations[]; // Use generated type
+  games: Game[]; // Use generated type
   // Remove unused props
   // onQuickBuy: (game: GameWithRelations) => void;
   // isCartMutating?: boolean;
@@ -44,7 +44,7 @@ const GameGrid: React.FC<GameGridProps> = ({
 
   // Render a single card (for both grid and list)
   const renderCard = (game: GameWithRelations) => (
-    <Link to={`/games?id=${game.id}`} style={{ textDecoration: "none" }}>
+    <Link to={`/game-detail?id=${game.id}`} style={{ textDecoration: "none" }}>
       <GameCard
         game={game} // Pass game data
         // Remove unused props

@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { Input, Button, Select, Row, Col, message } from "antd";
+import React, { useEffect } from "react";
+// Remove useState as Form will manage state
+// import React, { useState, useEffect } from "react";
+import { Form, Input, Button, Select, Row, Col, message } from "antd";
 
 const { Option } = Select;
 
@@ -34,215 +36,191 @@ const zipPatterns: { [key: string]: RegExp } = {
 };
 
 /**
- * @description A reusable form component for collecting shipping address information using useState.
+ * @description A reusable form component for collecting shipping address information using Ant Design Form.
  * @param {ShippingAddressFormProps} props Component props including initialValues and onSubmit handler.
  * @returns {React.FC<ShippingAddressFormProps>} The ShippingAddressForm component.
  */
 const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
-  initialValues = {},
+  initialValues = { country: "US" }, // Set default country here
   onSubmit,
   submitButtonText = "Save Address",
   isLoading = false, // Default loading to false
 }) => {
-  // State for form fields
-  const [fullName, setFullName] = useState(initialValues.fullName || "");
-  const [addressLine1, setAddressLine1] = useState(
-    initialValues.addressLine1 || ""
-  );
-  const [addressLine2, setAddressLine2] = useState(
-    initialValues.addressLine2 || ""
-  );
-  const [city, setCity] = useState(initialValues.city || "");
-  const [stateProvince, setStateProvince] = useState(
-    initialValues.stateProvince || ""
-  );
-  const [zipCode, setZipCode] = useState(initialValues.zipCode || "");
-  const [country, setCountry] = useState(initialValues.country || "US"); // Default to US
+  // Use Ant Design Form instance
+  const [form] = Form.useForm<ShippingAddressValues>();
+
+  // Get selected country to apply conditional validation
+  const selectedCountry = Form.useWatch("country", form);
 
   // Reset fields when initialValues change
   useEffect(() => {
-    setFullName(initialValues.fullName || "");
-    setAddressLine1(initialValues.addressLine1 || "");
-    setAddressLine2(initialValues.addressLine2 || "");
-    setCity(initialValues.city || "");
-    setStateProvince(initialValues.stateProvince || "");
-    setZipCode(initialValues.zipCode || "");
-    setCountry(initialValues.country || "US");
-  }, [initialValues]);
+    form.resetFields();
+    form.setFieldsValue(initialValues); // Set initial values using form instance
+  }, [initialValues, form]);
 
   /**
-   * @description Handles form submission and validation.
+   * @description Handles form submission via Ant Design Form's onFinish.
    */
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    // --- Validation ---
-    if (!fullName.trim()) {
-      message.error("Please enter your full name");
-      return;
-    }
-    if (!addressLine1.trim()) {
-      message.error("Please enter your street address");
-      return;
-    }
-    if (!city.trim()) {
-      message.error("Please enter your city");
-      return;
-    }
-    if (!stateProvince.trim()) {
-      message.error("Please enter your state or province");
-      return;
-    }
-    if (!country) {
-      message.error("Please select your country");
-      return;
-    }
-    if (!zipCode.trim()) {
-      message.error("Please enter your ZIP or postal code");
-      return;
-    }
-    // Conditional ZIP validation
-    const zipPattern = zipPatterns[country];
-    if (zipPattern && !zipPattern.test(zipCode)) {
-      message.error(
-        "Please enter a valid postal code for the selected country"
-      );
-      return;
-    }
-    // --- End Validation ---
-
-    const values: ShippingAddressValues = {
-      fullName: fullName.trim(),
-      addressLine1: addressLine1.trim(),
-      addressLine2: addressLine2?.trim() || undefined,
-      city: city.trim(),
-      stateProvince: stateProvince.trim(),
-      zipCode: zipCode.trim(),
-      country,
+  const handleFinish = async (values: ShippingAddressValues) => {
+    console.log("AntD Form Submitted Values:", values);
+    // Trim values before submitting
+    const trimmedValues: ShippingAddressValues = {
+      fullName: values.fullName.trim(),
+      addressLine1: values.addressLine1.trim(),
+      addressLine2: values.addressLine2?.trim() || undefined,
+      city: values.city.trim(),
+      stateProvince: values.stateProvince.trim(),
+      zipCode: values.zipCode.trim(),
+      country: values.country, // Country is from Select, no trim needed
     };
 
-    console.log("Shipping Address Submitted:", values);
     try {
-      await onSubmit(values);
-      // Optionally clear form on successful submit, depends on parent component logic
-      // setFullName(""); setAddressLine1(""); ... etc.
+      await onSubmit(trimmedValues); // Call the parent onSubmit handler
     } catch (error) {
       console.error("Error submitting address:", error);
-      // Error handling might be done in the parent component
-      // or display a generic message here
-      // message.error("Failed to save address.");
+      message.error("Failed to save address."); // Show error via message
     }
   };
 
+  const handleFinishFailed = (errorInfo: any) => {
+    console.log("Form validation failed:", errorInfo);
+    message.error("Please correct the errors in the form.");
+  };
+
   return (
-    /* Replace Form with standard form or div */
-    <form onSubmit={handleSubmit}>
+    <Form
+      form={form}
+      layout="vertical" // Set layout to vertical for labels above inputs
+      onFinish={handleFinish} // Use AntD onFinish for submission
+      onFinishFailed={handleFinishFailed}
+      initialValues={initialValues} // Set initial values directly on Form
+      requiredMark={false} // Optional: hide required mark
+    >
       {/* Full Name */}
-      <div style={{ marginBottom: "16px" }}>
-        <label style={{ display: "block", marginBottom: "8px" }}>
-          Full Name
-        </label>
-        <Input
-          placeholder="Enter your full name"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-        />
-      </div>
+      <Form.Item
+        label="Full Name"
+        name="fullName"
+        rules={[
+          {
+            required: true,
+            message: "Please enter your full name",
+            whitespace: true,
+          },
+        ]}
+      >
+        <Input placeholder="Enter your full name" />
+      </Form.Item>
 
       {/* Address Line 1 */}
-      <div style={{ marginBottom: "16px" }}>
-        <label style={{ display: "block", marginBottom: "8px" }}>
-          Address Line 1
-        </label>
-        <Input
-          placeholder="Street address, P.O. box, company name, c/o"
-          value={addressLine1}
-          onChange={(e) => setAddressLine1(e.target.value)}
-        />
-      </div>
+      <Form.Item
+        label="Address Line 1"
+        name="addressLine1"
+        rules={[
+          {
+            required: true,
+            message: "Please enter your street address",
+            whitespace: true,
+          },
+        ]}
+      >
+        <Input placeholder="Street address, P.O. box, company name, c/o" />
+      </Form.Item>
 
       {/* Address Line 2 */}
-      <div style={{ marginBottom: "16px" }}>
-        <label style={{ display: "block", marginBottom: "8px" }}>
-          Address Line 2 <span style={{ color: "#888" }}>(Optional)</span>
-        </label>
-        <Input
-          placeholder="Apartment, suite, unit, building, floor, etc."
-          value={addressLine2}
-          onChange={(e) => setAddressLine2(e.target.value)}
-        />
-      </div>
+      <Form.Item label="Address Line 2 (Optional)" name="addressLine2">
+        <Input placeholder="Apartment, suite, unit, building, floor, etc." />
+      </Form.Item>
 
       {/* City / State-Province Row */}
       <Row gutter={16}>
         <Col xs={24} sm={12}>
-          <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", marginBottom: "8px" }}>
-              City
-            </label>
-            <Input
-              placeholder="Enter city"
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-            />
-          </div>
+          <Form.Item
+            label="City"
+            name="city"
+            rules={[
+              {
+                required: true,
+                message: "Please enter your city",
+                whitespace: true,
+              },
+            ]}
+          >
+            <Input placeholder="Enter city" />
+          </Form.Item>
         </Col>
         <Col xs={24} sm={12}>
-          <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", marginBottom: "8px" }}>
-              State / Province
-            </label>
-            <Input
-              placeholder="Enter state or province"
-              value={stateProvince}
-              onChange={(e) => setStateProvince(e.target.value)}
-            />
-          </div>
+          <Form.Item
+            label="State / Province"
+            name="stateProvince"
+            rules={[
+              {
+                required: true,
+                message: "Please enter your state or province",
+                whitespace: true,
+              },
+            ]}
+          >
+            <Input placeholder="Enter state or province" />
+          </Form.Item>
         </Col>
       </Row>
 
       {/* Zip / Country Row */}
       <Row gutter={16}>
         <Col xs={24} sm={12}>
-          <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", marginBottom: "8px" }}>
-              ZIP / Postal Code
-            </label>
-            <Input
-              placeholder="Enter ZIP or postal code"
-              value={zipCode}
-              onChange={(e) => setZipCode(e.target.value)}
-            />
-          </div>
+          <Form.Item
+            label="ZIP / Postal Code"
+            name="zipCode"
+            rules={[
+              {
+                required: true,
+                message: "Please enter your ZIP or postal code",
+                whitespace: true,
+              },
+              // Conditional validation based on country
+              {
+                validator(_, value) {
+                  const pattern = zipPatterns[selectedCountry];
+                  if (!value || !pattern || pattern.test(value)) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(
+                    new Error(
+                      "Please enter a valid postal code for the selected country"
+                    )
+                  );
+                },
+              },
+            ]}
+            dependencies={["country"]} // Re-validate when country changes
+          >
+            <Input placeholder="Enter ZIP or postal code" />
+          </Form.Item>
         </Col>
         <Col xs={24} sm={12}>
-          <div style={{ marginBottom: "16px" }}>
-            <label style={{ display: "block", marginBottom: "8px" }}>
-              Country
-            </label>
-            {/* Use value and onChange for Select */}
-            <Select
-              placeholder="Select country"
-              value={country}
-              onChange={(value) => setCountry(value)}
-            >
+          <Form.Item
+            label="Country"
+            name="country"
+            rules={[{ required: true, message: "Please select your country" }]}
+          >
+            <Select placeholder="Select country">
               {/* TODO: Populate with a real list of countries */}
               <Option value="US">United States</Option>
               <Option value="CA">Canada</Option>
               <Option value="GB">United Kingdom</Option>
               <Option value="AU">Australia</Option>
             </Select>
-          </div>
+          </Form.Item>
         </Col>
       </Row>
 
       {/* Submit Button */}
-      <div style={{ marginTop: "24px" }}>
+      <Form.Item style={{ marginTop: "24px" }}>
         <Button type="primary" htmlType="submit" loading={isLoading}>
           {submitButtonText}
         </Button>
-      </div>
-    </form>
+      </Form.Item>
+    </Form>
   );
 };
 

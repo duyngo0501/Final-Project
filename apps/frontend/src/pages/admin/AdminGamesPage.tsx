@@ -12,7 +12,7 @@ import {
   message,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
-import { GameWithRelations as ApiGame, GameListingResponse } from "@/gen/types"; // Generated API types
+import { Game, GameListingResponse } from "@/gen/types"; // Generated API types
 import { useGameControllerListGames } from "@/gen/query/GamesHooks"; // Import the SWR hook
 import type { ColumnsType } from "antd/es/table";
 import type { Key } from "react";
@@ -22,22 +22,6 @@ const { Content } = Layout;
 const { Title } = Typography;
 
 // --- Mapping function (same as in SearchResultsPage, potentially move to a util file later) ---
-const mapApiGameToUIGame = (apiGame: ApiGame) => {
-  const categoryName = apiGame.categories?.[0]?.name ?? "Unknown";
-  const platformName = apiGame.platforms?.[0]?.name ?? "Unknown";
-
-  return {
-    id: apiGame.id,
-    title: apiGame.name,
-    thumbnail: apiGame.background_image ?? "/placeholder-image.jpg",
-    price: apiGame.price ?? -1,
-    category: categoryName,
-    description: apiGame.description ?? undefined,
-    platform: platformName,
-    releaseDate: apiGame.released_date ?? undefined,
-    rating: apiGame.rating ?? undefined,
-  };
-};
 
 /**
  * @description Admin page for viewing and managing games with CRUD operations.
@@ -58,13 +42,7 @@ const AdminGamesPage: React.FC = () => {
     mutate, // SWR mutate function
   } = useGameControllerListGames(
     undefined, // No request body for GET
-    {
-      // Query parameters for pagination and sorting
-      limit: pagination.pageSize,
-      skip: (pagination.current - 1) * pagination.pageSize,
-      sort_by: sorter.field,
-      is_asc: sorter.order === "ascend",
-    },
+
     {
       query: {
         keepPreviousData: true, // Keep showing old data while loading new page
@@ -75,14 +53,13 @@ const AdminGamesPage: React.FC = () => {
 
   // --- Process API Response & Map Data --- //
   const { games, total } = useMemo(() => {
-    const items: ApiGame[] = response?.data?.items ?? [];
-    const mappedGames: UIGame[] = items.map(mapApiGameToUIGame);
+    const items: Game[] = response?.data?.items ?? [];
     const totalCount: number = response?.data?.total ?? 0;
-    return { games: mappedGames, total: totalCount };
+    return { games: items, total: totalCount };
   }, [response]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingGame, setEditingGame] = useState<UIGame | null>(null); // Use UIGame type
+  const [editingGame, setEditingGame] = useState<Game | null>(null); // Use Game type
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- Modal Handlers ---
@@ -91,8 +68,8 @@ const AdminGamesPage: React.FC = () => {
     setIsModalVisible(true);
   };
 
-  const showEditModal = (game: UIGame) => {
-    // Use UIGame type
+  const showEditModal = (game: Game) => {
+    // Use Game type
     setEditingGame(game);
     setIsModalVisible(true);
   };
@@ -140,10 +117,10 @@ const AdminGamesPage: React.FC = () => {
   };
 
   // --- Delete Handler ---
-  const handleDeleteGame = (game: UIGame) => {
+  const handleDeleteGame = (game: Game) => {
     // Use UIGame type
     Modal.confirm({
-      title: `Delete Game: ${game.title}?`,
+      title: `Delete Game: ${game.name}?`,
       content: "Are you sure? This cannot be undone.",
       okText: "Delete",
       okType: "danger",
@@ -154,7 +131,7 @@ const AdminGamesPage: React.FC = () => {
           console.log("[Mock API] Deleting game:", game.id);
           await new Promise((resolve) => setTimeout(resolve, 500));
           // TODO: Call actual delete API: await gamesAdminAPI.deleteGame(game.id);
-          message.success(`Game '${game.title}' deleted successfully!`);
+          message.success(`Game '${game.name}' deleted successfully!`);
           mutate?.(); // Revalidate data
         } catch (error: any) {
           console.error("Failed to delete game:", error);
@@ -177,7 +154,7 @@ const AdminGamesPage: React.FC = () => {
   };
 
   // Define table columns
-  const columns: ColumnsType<UIGame> = [
+  const columns: ColumnsType<Game> = [
     {
       title: "ID",
       dataIndex: "id",
@@ -203,7 +180,7 @@ const AdminGamesPage: React.FC = () => {
       dataIndex: "price",
       key: "price",
       width: 120,
-      render: (price: number, record: UIGame) => (
+      render: (price: number, record: Game) => (
         <span>
           {/* Check for unavailable price based on mapping */}
           {price < 0 ? (
@@ -222,7 +199,7 @@ const AdminGamesPage: React.FC = () => {
       key: "actions",
       width: 150,
       align: "center" as const,
-      render: (_: any, record: UIGame) => (
+      render: (_: any, record: Game) => (
         <Space size="small">
           <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
             Edit

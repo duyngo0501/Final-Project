@@ -1,13 +1,13 @@
-import React from "react";
+import React, { useState } from "react";
 import { Card, Typography, Button, Tag, Space, Image, Badge } from "antd";
 import { ShoppingCartOutlined } from "@ant-design/icons";
-import { GameWithRelations, Game } from "@/gen/types";
+import { Game } from "@/gen/types";
 import { useCart } from "@/contexts/CartContext";
 
 const { Title, Text, Paragraph } = Typography;
 
 interface GameCardProps {
-  game: GameWithRelations;
+  game: Game;
   className?: string;
 }
 
@@ -17,16 +17,30 @@ interface GameCardProps {
  * @returns {React.ReactElement} The rendered GameCard component.
  */
 const GameCard: React.FC<GameCardProps> = ({ game, className }) => {
-  const { addItem, isMutating: isAddingToCart } = useCart();
+  const { addItem } = useCart();
 
-  const { id, name, background_image, price, categories, description } = game;
+  const [isAddingThisItem, setIsAddingThisItem] = useState(false);
 
-  const handleAddToCart = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    await addItem(game, 1);
-  };
+  const { id, name, background_image, price, description } = game;
 
   const displayPrice = price !== null && price !== undefined;
+
+  const handleLocalAddToCart = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    console.log(`[GameCard ${id}] Setting loading state to true`);
+    setIsAddingThisItem(true);
+    try {
+      console.log(`[GameCard ${id}] Calling addItem...`);
+      await addItem(id, 1);
+      console.log(`[GameCard ${id}] addItem finished successfully.`);
+    } catch (error) {
+      console.error(`[GameCard ${id}] Error adding item:`, error);
+    } finally {
+      console.log(`[GameCard ${id}] Setting loading state back to false`);
+      setIsAddingThisItem(false);
+    }
+  };
 
   return (
     <Card
@@ -46,10 +60,10 @@ const GameCard: React.FC<GameCardProps> = ({ game, className }) => {
         <Button
           type="primary"
           icon={<ShoppingCartOutlined />}
-          onClick={handleAddToCart}
+          onClick={handleLocalAddToCart}
           key={`add-${id}`}
-          disabled={isAddingToCart || price === null || price === undefined}
-          loading={isAddingToCart}
+          disabled={isAddingThisItem || price === null || price === undefined}
+          loading={isAddingThisItem}
         >
           {displayPrice ? "Add to Cart" : "Details"}
         </Button>,
@@ -63,9 +77,6 @@ const GameCard: React.FC<GameCardProps> = ({ game, className }) => {
         }
         description={
           <Space direction="vertical" style={{ width: "100%" }}>
-            {categories && categories.length > 0 && categories[0].name && (
-              <Tag color="blue">{categories[0].name}</Tag>
-            )}
             {description && (
               <Paragraph type="secondary" ellipsis={{ rows: 2 }}>
                 {description}

@@ -17,6 +17,7 @@ disable=
     too-few-public-methods, R0903, # Common for Pydantic/Data models
     redefined-builtin, W0622,
     wrong-import-order,
+    logging-fstring-interpolation,
     not-access,
 enable= no-member
 

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
-    "dev": "export PRISMA_PY_DEBUG_GENERATOR=1 && source .venv/bin/activate && uv sync && uvicorn main:app --host 0.0.0.0 --port 8000",
+    "dev": "export PRISMA_PY_DEBUG_GENERATOR=1 && source .venv/bin/activate && uv sync && uvicorn main:app --host 0.0.0.0 --port 8000 --reload",
     "format": "source .venv/bin/activate && ruff format .",
     "gen:postman": "cd backend && uv run fastapi-openapi-to-postman http://127.0.0.1:8000/openapi.json > ../postman_collection.json",
     "docker:build": "docker build -t backend-app .",
@@ -18,7 +18,7 @@
     "list": "node scripts/dev.js list",
     "generate": "node scripts/dev.js generate",
     "parse-prd": "node scripts/dev.js parse-prd",
-    "seed": "python app/services/rawg.py",
+    "seed": "python services/rawg.py",
     "prisma": "export PRISMA_PY_DEBUG_GENERATOR=1 && npx prisma generate && npx prisma db push"
   },
   "devDependencies": {

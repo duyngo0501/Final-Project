@@ -20,8 +20,7 @@ import {
 import { ShoppingCartOutlined } from "@ant-design/icons";
 import { useGameControllerGetGame } from "@/gen/query/GamesHooks"; // Adjust path if needed
 import { useCart } from "@/contexts/CartContext"; // Import cart context
-import { Game } from "@/types/game"; // Import local Game type
-import { GameWithRelations } from "@/gen/types"; // Assuming this is the correct generated type
+import { Game } from "@/gen/types"; // Assuming this is the correct generated type
 
 const { Content } = Layout;
 const { Title, Paragraph, Text } = Typography;
@@ -61,14 +60,13 @@ const GameDetailsPage: React.FC = () => {
       // --- Map fetched game (GameWithRelations) to local Game type --- //
       const gameToAdd: Game = {
         id: game.id,
-        title: game.name,
-        thumbnail: game.background_image ?? "/placeholder-image.jpg",
+        name: game.name,
+        background_image: game.background_image ?? "/placeholder-image.jpg",
         price: typeof game.price === "number" ? game.price : 0,
-        category: game.categories?.[0]?.name ?? "Unknown",
         // Only include fields required by the local Game type / addItem function
         description: game.description ?? undefined, // Include if needed by Game type
         rating: typeof game.rating === "number" ? game.rating : undefined, // Include if needed
-        releaseDate: game.released_date
+        released_date: game.released_date
           ? new Date(game.released_date).toISOString()
           : undefined, // Include if needed
       };

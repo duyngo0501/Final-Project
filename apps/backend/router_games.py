@@ -102,7 +102,7 @@ async def list_games(
 
         # Validate and return using the local Pydantic model
         return GameListingResponse(
-            items=[GameWithRelations.model_validate(item) for item in items],
+            items=[Game.model_validate(item) for item in items],
             total=total,
             page=(skip // limit) + 1,
             limit=limit,
@@ -124,7 +124,7 @@ async def list_games(
 
 @router.post(
     "/",
-    response_model=GameWithRelations,  # ADDED back with local model
+    response_model=Game,  # ADDED back with local model
     status_code=status.HTTP_201_CREATED,
     operation_id="GameController_createGame",
 )
@@ -158,7 +158,7 @@ async def create_game_endpoint(
             detail=f"Error creating game: {e}",
         )
     # Validate and return using the local Pydantic model
-    return GameWithRelations.model_validate(new_game_prisma)
+    return Game.model_validate(new_game_prisma)
 
 
 @router.delete(
@@ -192,7 +192,7 @@ async def delete_game_endpoint(
 # --- Endpoint for Game Details ---
 @router.get(
     "/{game_id}",
-    response_model=GameWithRelations,  # ADDED back with local model
+    response_model=Game,  # ADDED back with local model
     operation_id="GameController_getGame",
     summary="Get Game Details",
     description="Retrieve detailed information for a specific game by its UUID.",
@@ -218,7 +218,7 @@ async def get_game_details(
         raise HTTPException(status_code=404, detail=f"Game with id {game_id} not found")
 
     # Validate and return using the local Pydantic model
-    return GameWithRelations.model_validate(db_game)
+    return Game.model_validate(db_game)
 
 
 # --- Comment out the non-functional /sync-rawg endpoint ---

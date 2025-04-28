@@ -142,27 +142,25 @@ async def add_item_to_cart(
         user_cart = await get_or_create_cart_prisma(db=db, user_id=user_id)
 
         # Find existing item first approach:
-        existing_item = await db.cart_entry.find_first(
-            where={"shopping_cart_id": user_cart.id, "game_id": game_id}
+        existing_item = await db.cartentry.find_first(
+            where={"cart_id": user_cart.id, "game_id": game_id}
         )
 
         if existing_item:
             # Update quantity
-            cart_item_prisma = await db.cart_entry.update(
+            cart_item_prisma = await db.cartentry.update(
                 where={"id": existing_item.id},
                 data={"quantity": existing_item.quantity + quantity},
                 include={"game": True},  # Include game for response
             )
         else:
             # Create new item
-            cart_item_prisma = await db.cart_entry.create(
-                data={
-                    "shopping_cart_id": user_cart.id,
-                    "game_id": game_id,
-                    "quantity": quantity,
-                },
-                include={"game": True},  # Include game for response
-            )
+            cart_entry_data = {
+                "game_id": game_id,
+                "cart_id": user_cart.id,
+                "quantity": quantity,
+            }
+            cart_item_prisma = await db.cartentry.create(data=cart_entry_data)
 
     except PrismaError as e:
         raise HTTPException(
@@ -206,15 +204,15 @@ async def update_cart_item_quantity(
             raise HTTPException(status_code=404, detail="Cart not found")
 
         # Find the specific item
-        item_to_update = await db.cart_entry.find_first(
-            where={"shopping_cart_id": user_cart.id, "game_id": game_id}
+        item_to_update = await db.cartentry.find_first(
+            where={"cart_id": user_cart.id, "game_id": game_id}
         )
 
         if not item_to_update:
             raise HTTPException(status_code=404, detail="Item not found in cart")
 
         # Update the quantity
-        updated_item_prisma = await db.cart_entry.update(
+        updated_item_prisma = await db.cartentry.update(
             where={"id": item_to_update.id},
             data={"quantity": new_quantity},
             include={"game": True},  # Include game for response
@@ -250,15 +248,15 @@ async def remove_item_from_cart(
             raise HTTPException(status_code=404, detail="Item not found in cart")
 
         # Find the item within the user's cart
-        item_to_delete = await db.cart_entry.find_first(
-            where={"shopping_cart_id": user_cart.id, "game_id": game_id}
+        item_to_delete = await db.cartentry.find_first(
+            where={"cart_id": user_cart.id, "game_id": game_id}
         )
 
         if not item_to_delete:
             raise HTTPException(status_code=404, detail="Item not found in cart")
 
         # Delete the specific cart entry using its unique ID
-        await db.cart_entry.delete(where={"id": item_to_delete.id})
+        await db.cartentry.delete(where={"id": item_to_delete.id})
 
     except (
         RecordNotFoundError
@@ -289,7 +287,7 @@ async def clear_cart(db: DbDep, current_user: CurrentUser) -> None:
 
         if user_cart:
             # Delete all cart entries associated with this cart_id
-            await db.cart_entry.delete_many(where={"shopping_cart_id": user_cart.id})
+            await db.cartentry.delete_many(where={"cart_id": user_cart.id})
 
     except PrismaError as e:
         raise HTTPException(

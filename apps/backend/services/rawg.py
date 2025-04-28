@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 import random  # Import random module
@@ -11,6 +10,7 @@ import requests
 # --- Prisma Imports (Add these) ---
 # Assuming your Prisma client is accessible via app.core.db
 # Adjust the import path if necessary
+from db import connect_db, disconnect_db, prisma
 from prisma.errors import PrismaError, UniqueViolationError
 from prisma.models import Game
 
@@ -28,13 +28,6 @@ RAWG_API_KEY = os.getenv(
 )  # Replace with your actual key or load from env
 
 RAWG_BASE_URL = "https://api.rawg.io/api"
-
-# --- Cache Config (Add this) ---
-CACHE_FILE = "rawg_visited_pages.json"
-# --- End Cache Config ---
-
-
-# --- RAWG.io API Client ---
 
 
 def get_rawg_games(
@@ -76,7 +69,7 @@ def get_rawg_games(
     if platforms:
         params["platforms"] = platforms
 
-    logging.info(f"Fetching RAWG games page {page} with params: {params}")
+    logging.info("Fetching RAWG games page %s with params: %s", page, params)
     try:
         response = requests.get(
             f"{RAWG_BASE_URL}/games",
@@ -87,15 +80,15 @@ def get_rawg_games(
         response.raise_for_status()
         return response.json()
     except requests.exceptions.Timeout:
-        logging.error(f"Timeout while fetching RAWG games page {page}.")
+        logging.error("Timeout while fetching RAWG games page %s.", page)
         return None
     except requests.exceptions.RequestException as e:
-        logging.error(f"Error fetching RAWG games page {page}: {e}")
+        logging.error("Error fetching RAWG games page %s: %s", page, e)
         status_code = response.status_code if "response" in locals() else "N/A"
         response_text = response.text if "response" in locals() else "N/A"
-        logging.error(f"Response status: {status_code}")
+        logging.error("Response status: %s", status_code)
         if status_code == 404:
-            logging.warning(f"Page {page} not found (404). Stopping.")
+            logging.warning("Page %s not found (404). Stopping.", page)
             return None
         return None
 
@@ -113,13 +106,13 @@ async def crawl_and_store_rawg_games(max_pages: int | None = None, page_size: in
     logging.info("Wiping existing Game table before crawl...")
     try:
         delete_result = await prisma.game.delete_many({})
-        logging.info(f"Successfully deleted {delete_result} existing games.")
+        logging.info("Successfully deleted %s existing games.", delete_result)
     except PrismaError as e:
-        logging.error(f"Error wiping Game table: {e}. Aborting crawl.")
+        logging.error("Error wiping Game table: %s. Aborting crawl.", e)
         return  # Stop if we can't wipe the table
     # --- End Deletion ---
 
-    visited_pages = load_visited_pages()
+    # visited_pages = load_visited_pages()
     current_page = 1
     games_processed_count = 0
     total_pages_processed = 0
@@ -127,28 +120,29 @@ async def crawl_and_store_rawg_games(max_pages: int | None = None, page_size: in
     while True:
         # --- Loop Setup ---
         if max_pages is not None and current_page > max_pages:
-            logging.info(f"Reached max page limit ({max_pages}). Stopping crawl.")
+            logging.info("Reached max page limit (%s). Stopping crawl.", max_pages)
             break
 
-        if current_page in visited_pages:
-            logging.info(f"Page {current_page} already visited (cached). Skipping.")
-            current_page += 1
-            continue
+        # if current_page in visited_pages:
+        #     logging.info(f"Page {current_page} already visited (cached). Skipping.")
+        #     current_page += 1
+        #     continue
 
         # --- Fetch Page Data ---
         page_data = get_rawg_games(page=current_page, page_size=page_size)
 
         if not page_data or not page_data.get("results"):
             logging.warning(
-                f"No results found for page {current_page} or fetch failed. Stopping crawl."
+                "No results found for page %s or fetch failed. Stopping crawl.",
+                current_page,
             )
-            visited_pages.add(current_page)
-            save_visited_pages(visited_pages)
+            # visited_pages.add(current_page)
+            # save_visited_pages(visited_pages)
             break  # Stop if no results or error
 
         games_on_page = page_data["results"]
         logging.info(
-            f"Processing {len(games_on_page)} games from page {current_page}..."
+            "Processing %s games from page %s...", len(games_on_page), current_page
         )
 
         # --- Step 4: Process Games Individually (Upsert ONLY CORE DATA) ---
@@ -211,62 +205,42 @@ async def crawl_and_store_rawg_games(max_pages: int | None = None, page_size: in
                     k: v for k, v in game_payload_raw.items() if v is not None
                 }
 
-                # Create update payload (remove identifiers and non-updatable fields)
-                # Keep fields that might change based on RAWG updates
-                updatable_fields = [
-                    "tba",
-                    "released_date",
-                    "background_image",
-                    "rating",
-                    "rating_top",
-                    "ratings_count",
-                    "reviews_text_count",
-                    "added",
-                    "metacritic",
-                    "playtime",
-                    "suggestions_count",
-                    "reviews_count",
-                    "saturated_color",
-                    "dominant_color",
-                    "description",
-                    # Price and is_custom are managed internally, not updated from RAWG
-                ]
-                game_payload_update = {
-                    k: v
-                    for k, v in game_payload_create.items()
-                    if k in updatable_fields
-                }
-
-                # --- 4b. Upsert Game ---
-                game_in_db = await prisma.game.upsert(
-                    where={"rawg_id": rawg_id},
-                    data={"create": game_payload_create, "update": game_payload_update},
-                )
-                db_game_id = game_in_db.id
+                await prisma.game.create(data=game_payload_create)
 
                 page_games_processed += 1
 
             except UniqueViolationError as uve:
                 logging.warning(
-                    f"Unique constraint error during game upsert {game_name} (RAWG ID: {rawg_id}): {uve}. Might already exist."
+                    "Unique constraint error during game upsert %s (RAWG ID: %s): %s. Might already exist.",
+                    game_name,
+                    rawg_id,
+                    uve,
                 )
             except PrismaError as pe:
                 logging.error(
-                    f"Prisma error processing game {game_name} (RAWG ID: {rawg_id}): {pe}"
+                    "Prisma error processing game %s (RAWG ID: %s): %s",
+                    game_name,
+                    rawg_id,
+                    pe,
                 )
             except Exception as exc:
                 logging.error(
-                    f"Unexpected error processing game {game_name} (RAWG ID: {rawg_id}): {exc}",
-                    exc_info=True,
+                    "Unexpected error processing game %s (RAWG ID: %s): %s",
+                    game_name,
+                    rawg_id,
+                    exc,
                 )
 
         # --- After processing all games on page ---
-        visited_pages.add(current_page)
-        save_visited_pages(visited_pages)
+        # visited_pages.add(current_page)
+        # save_visited_pages(visited_pages)
         total_pages_processed += 1
         games_processed_count += page_games_processed
         logging.info(
-            f"Finished processing page {current_page}. Games processed on page: {page_games_processed}. Total processed so far: {games_processed_count}"
+            "Finished processing page %s. Games processed on page: %s. Total processed so far: %s",
+            current_page,
+            page_games_processed,
+            games_processed_count,
         )
 
         # Check next page and sleep
@@ -277,7 +251,9 @@ async def crawl_and_store_rawg_games(max_pages: int | None = None, page_size: in
         await asyncio.sleep(1.5)
 
     logging.info(
-        f"RAWG Crawl finished. Processed {total_pages_processed} new pages. Total games processed: {games_processed_count}."
+        "RAWG Crawl finished. Processed %s new pages. Total games processed: %s.",
+        total_pages_processed,
+        games_processed_count,
     )
 
 
@@ -300,24 +276,24 @@ if __name__ == "__main__":
         default=40,
         help="Number of games per page (default: 40)",
     )
-    parser.add_argument(
-        "--clear-cache",
-        action="store_true",
-        help="Clear the visited pages cache before starting",
-    )
+    # parser.add_argument(
+    #     "--clear-cache",
+    #     action="store_true",
+    #     help="Clear the visited pages cache before starting",
+    # )
 
     args = parser.parse_args()
 
-    if args.clear_cache:
-        logging.info("Clearing visited pages cache...")
-        if os.path.exists(CACHE_FILE):
-            try:
-                os.remove(CACHE_FILE)
-                logging.info("Cache cleared.")
-            except OSError as e:
-                logging.error(f"Error removing cache file {CACHE_FILE}: {e}")
-        else:
-            logging.info("Cache file not found, nothing to clear.")
+    # if args.clear_cache:
+    #     logging.info("Clearing visited pages cache...")
+    #     if os.path.exists(CACHE_FILE):
+    #         try:
+    #             os.remove(CACHE_FILE)
+    #             logging.info("Cache cleared.")
+    #         except OSError as e:
+    #             logging.error(f"Error removing cache file {CACHE_FILE}: {e}")
+    #     else:
+    #         logging.info("Cache file not found, nothing to clear.")
 
     async def main():
         await connect_db()

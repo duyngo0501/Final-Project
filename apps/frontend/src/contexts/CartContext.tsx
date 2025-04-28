@@ -57,7 +57,7 @@ interface CartContextValue extends CartMutationState {
   error: Error | null;
   totalItems: number;
   totalPrice: number;
-  addItem: (game: Game, quantity?: number) => Promise<Cart | null>;
+  addItem: (gameId: string, quantity?: number) => Promise<CartItem | null>;
   removeItem: (gameId: string) => Promise<Cart | null>;
   updateQuantity: (gameId: string, quantity: number) => Promise<Cart | null>;
   clearCart: () => Promise<Cart | null>;
@@ -264,35 +264,49 @@ export const CartProvider: React.FC<CartProviderProps> = ({ children }) => {
       }
     );
 
-  // Wrapper function for adding item - SIMPLIFIED (No Optimistic Update)
+  // --- Add Item Action --- //
   const addItem = useCallback(
-    async (game: Game, quantity: number = 1): Promise<Cart | null> => {
+    async (gameId: string, quantity: number = 1): Promise<CartItem | null> => {
       if (!isAuthenticated) {
-        console.error("User not authenticated");
+        message.error("Please log in to add items to the cart.");
         return null;
       }
+      if (quantity <= 0) {
+        message.error("Quantity must be positive."); // Basic validation
+        return null;
+      }
+
+      console.log(`Context: Attempting to add item ${gameId} qty ${quantity}`);
+      setMutationState({ isMutating: true, mutationError: null });
+
+      // Prepare the payload for the API call
       const payload: CartItemCreateSchema = {
-        game_id: game.id,
+        game_id: gameId,
         quantity: quantity,
       };
 
       try {
-        setMutationState({ isMutating: true, mutationError: null });
-        await addItemTrigger(payload);
+        // Trigger the SWR mutation
+        const addedItem = await addItemTrigger(payload);
+        console.log("Context: Add item success:", addedItem);
+        message.success("Item added to cart!");
         setMutationState({ isMutating: false, mutationError: null });
-        message.success(`${game.name} added to cart!`);
-        return null;
+        // SWR handles revalidation, no need to manually mutate here unless
+        // you need optimistic updates (which we simplified away for now).
+        // Return the newly added/updated CartItem
+        return addedItem ?? null; // Return null if trigger didn't return data
       } catch (error) {
-        setMutationState((prev) => ({
-          ...prev,
+        console.error("Context: Error in addItem:", error);
+        message.error("Failed to add item to cart.");
+        setMutationState({
           isMutating: false,
-          mutationError: prev.mutationError,
-        }));
-        message.error(`Failed to add ${game.name} to cart.`);
+          mutationError:
+            error instanceof Error ? error : new Error("Failed to add item"),
+        });
         return null;
       }
     },
-    [isAuthenticated, addItemTrigger]
+    [addItemTrigger, isAuthenticated] // Add dependencies
   );
 
   // Wrapper function for removing item - SIMPLIFIED (No Optimistic Update)

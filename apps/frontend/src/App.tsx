@@ -8,6 +8,7 @@ import Cart from "@/pages/Cart";
 import ProfilePage from "@/pages/ProfilePage";
 import BlogPage from "@/pages/BlogPage";
 import BlogPostDetailPage from "@/pages/BlogPostDetailPage";
+import CheckoutPage from "@/pages/CheckoutPage";
 import PrivateRoute from "@/components/PrivateRoute";
 import MainLayout from "@/layouts/MainLayout";
 import AdminLayout from "@/layouts/AdminLayout";
@@ -38,6 +39,14 @@ function App(): JSX.Element {
                 element={
                   <PrivateRoute>
                     <Cart />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="checkout"
+                element={
+                  <PrivateRoute>
+                    <CheckoutPage />
                   </PrivateRoute>
                 }
               />
