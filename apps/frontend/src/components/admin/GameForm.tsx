@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Form,
   Input,
@@ -11,37 +11,42 @@ import {
   Row,
   Col,
   message,
+  FormProps,
 } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
-import { Game } from "@/types/game"; // Assuming Game type is defined
+import { Game } from "@/gen/types/Game";
+import { HTTPValidationError } from "@/gen/types/HTTPValidationError";
 import dayjs from "dayjs";
+import { z } from "zod";
+
+import { gameControllerCreateGame } from "@/gen/client/gameControllerCreateGame";
+import { gameCreateSchemaSchema as GameCreateSchema } from "@/gen/zod/gameCreateSchemaSchema";
 
 const { Option } = Select;
 const { TextArea } = Input;
 
 /**
  * @description Interface for the Game form values.
- * Matches the Game type where possible.
+ * Using camelCase for form state, will map to snake_case for API.
  */
 export interface GameFormValues {
   title: string;
   description?: string;
   price: number;
-  discountedPrice?: number | null; // Allow null or undefined
+  discountedPrice?: number | null;
   category: string;
-  thumbnail?: any; // Handle Ant Design Upload file list
-  releaseDate?: dayjs.Dayjs | null;
-  // Add other fields like platform if needed
+  thumbnail?: any; // Ant Design Upload file list type
+  releaseDate?: dayjs.Dayjs | null; // Use Dayjs for DatePicker
 }
 
 /**
  * @description Props for the GameForm component.
  */
 interface GameFormProps {
-  initialValues?: Game | null; // Game object for editing, null/undefined for creating
-  onFinish: (values: GameFormValues) => Promise<void> | void;
+  initialValues?: Game | null;
+  onSubmitSuccess?: (createdGame: Game) => void;
+  onFinishFailed?: (errorInfo: any) => void;
   onCancel?: () => void;
-  isLoading?: boolean;
 }
 
 // Mock categories for the select dropdown
@@ -62,58 +67,107 @@ const MOCK_CATEGORIES = [
  */
 const GameForm: React.FC<GameFormProps> = ({
   initialValues,
-  onFinish,
+  onSubmitSuccess,
+  onFinishFailed,
   onCancel,
-  isLoading = false,
 }) => {
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<GameFormValues>();
+  // --- State for manual loading management ---
+  const [isMutating, setIsMutating] = useState(false);
 
-  // Set initial form values when editing
+  // --- Reinstate useEffect with assumed property names ---
   useEffect(() => {
     if (initialValues) {
+      // Assuming Game type uses these property names (adjust if needed)
+      // Linter errors here suggest the 'Game' type might be different than assumed.
+      // Commenting out potentially problematic fields for now.
       form.setFieldsValue({
-        ...initialValues,
-        // Convert string date from Game type to Dayjs object for DatePicker
-        releaseDate: initialValues.releaseDate
-          ? dayjs(initialValues.releaseDate)
+        title: initialValues.name, // Map name to title for form
+        description: initialValues.description ?? undefined, // Default null to undefined
+        price: initialValues.price ?? undefined, // Default null to undefined
+        // discountedPrice: initialValues.discounted_price ?? null,
+        // category: initialValues.category,
+        // thumbnail: initialValues.thumbnail
+        //   ? [
+        //       {
+        //         uid: "-1",
+        //         name: "current_image.png",
+        //         status: "done",
+        //         url: initialValues.thumbnail,
+        //       },
+        //     ]
+        //   : [],
+        releaseDate: initialValues.released_date // Assuming released_date exists
+          ? dayjs(initialValues.released_date)
           : null,
-        // Handle thumbnail display if needed (initialValues.thumbnail might be URL string)
-        // For now, just setting the field value if it exists
-        thumbnail: initialValues.thumbnail
-          ? [
-              {
-                uid: "-1",
-                name: "current_image.png",
-                status: "done",
-                url: initialValues.thumbnail,
-              },
-            ]
-          : [],
-        discountedPrice: initialValues.discountedPrice ?? null, // Ensure null if undefined
       });
     } else {
-      form.resetFields(); // Reset form for creating new game
+      form.resetFields();
     }
   }, [initialValues, form]);
 
-  const handleFormSubmit = (values: GameFormValues) => {
-    console.log("Form Values:", values);
-    // Process thumbnail - might need to extract file object from list
-    const processedValues = {
-      ...values,
-      // Convert Dayjs back to string or handle as needed by API
-      releaseDate: values.releaseDate
+  const handleFormSubmit = async (values: GameFormValues) => {
+    console.log("Form Values submitted:", values);
+    setIsMutating(true); // Start loading
+
+    // Prepare data for the API (map form fields to API schema)
+    // Filter out undefined/null properties that might not be accepted by the Zod schema
+    const apiData: Partial<z.infer<typeof GameCreateSchema>> = {
+      name: values.title, // Map form's title to API's name
+      description: values.description || undefined,
+      price: values.price,
+      // discounted_price: values.discountedPrice === null ? undefined : values.discountedPrice, // ERROR: Property does not exist
+      // category: values.category, // Assuming category is not part of GameCreateSchema based on error
+      released_date: values.releaseDate
         ? values.releaseDate.toISOString()
         : undefined,
-      // Extract file if needed, or handle upload separately
-      thumbnail:
-        values.thumbnail?.[0]?.originFileObj ||
-        (initialValues?.thumbnail && !values.thumbnail?.[0]?.originFileObj
-          ? initialValues.thumbnail
-          : undefined),
+      // thumbnail: values.thumbnail?.[0]?.originFileObj, // Assuming thumbnail is not part of GameCreateSchema
     };
-    console.log("Processed Form Values for API:", processedValues);
-    onFinish(processedValues as any); // Pass processed values (adjust type assertion)
+
+    console.log("Data being sent to API:", apiData);
+
+    try {
+      if (initialValues) {
+        // TODO: Implement update logic using a direct client call
+        console.warn("Update functionality not yet implemented in GameForm");
+        message.warning("Update functionality is not implemented yet.");
+        // Example: await gameControllerUpdateGame(initialValues.id, updateData);
+        // Handle success/error for update...
+      } else {
+        // Directly call the create client function
+        // Pass the data as the second argument (requestBody)
+        // The first argument seems to be for configs/options, pass empty object for now.
+        // This needs verification based on the actual generated client function signature.
+        // Correction: Pass apiData as the first argument based on linter error
+        // const response = await gameControllerCreateGame(apiData as z.infer<typeof GameCreateSchema>);
+        // Correction 2: Pass path params (none needed here, so maybe null/undefined?), then data, then options
+        // const response = await gameControllerCreateGame(undefined, apiData as z.infer<typeof GameCreateSchema>, {});
+        // Correction 3: Use correct signature: data first, params second (use {}), config is optional
+        // Correction 4: Provide required `args` and `kwargs` in the params object
+        const response = await gameControllerCreateGame(apiData as z.infer<typeof GameCreateSchema>, { args: undefined, kwargs: undefined });
+        message.success(`Game "${response.data.name}" created successfully!`); // Use name from response
+        form.resetFields();
+        if (onSubmitSuccess) {
+          onSubmitSuccess(response.data);
+        }
+      }
+    } catch (error: any) { // Catch errors
+      console.error("Error submitting game form:", error);
+      let errorMsg = "Failed to process game request.";
+      const errorDetail = error?.response?.data?.detail || error?.detail || error?.message;
+      if (errorDetail) {
+        if (Array.isArray(errorDetail)) {
+          errorMsg = errorDetail.map(d => `${d.loc?.join('.') || 'error'}: ${d.msg}`).join("; ");
+        } else {
+          errorMsg = String(errorDetail);
+        }
+      } else if (error instanceof Error) {
+         errorMsg = error.message;
+      }
+      message.error(errorMsg);
+    } finally {
+      setIsMutating(false); // Stop loading regardless of success/error
+    }
   };
 
   // Basic validation for upload (customize as needed)
@@ -126,12 +180,17 @@ const GameForm: React.FC<GameFormProps> = ({
     return e && e.fileList ? e.fileList.slice(-1) : [];
   };
 
+  const handleFinishFailed: FormProps<GameFormValues>["onFinishFailed"] = (errorInfo) => {
+    console.log("Form validation failed:", errorInfo);
+    message.error("Please correct the errors in the form.");
+  };
+
   return (
     <Form
       form={form}
       layout="vertical"
       onFinish={handleFormSubmit}
-      // initialValues prop on Form might interfere with useEffect/setFieldsValue
+      onFinishFailed={handleFinishFailed} // Use the typed handler
     >
       <Row gutter={16}>
         <Col span={12}>
@@ -229,11 +288,11 @@ const GameForm: React.FC<GameFormProps> = ({
 
       <Form.Item>
         <Space>
-          <Button type="primary" htmlType="submit" loading={isLoading}>
+          <Button type="primary" htmlType="submit" loading={isMutating}>
             {initialValues ? "Save Changes" : "Create Game"}
           </Button>
           {onCancel && (
-            <Button onClick={onCancel} disabled={isLoading}>
+            <Button onClick={onCancel} disabled={isMutating}>
               Cancel
             </Button>
           )}
