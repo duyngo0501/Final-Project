@@ -66,10 +66,11 @@ const CheckoutPage: React.FC = () => {
 
   const next = () => {
     // Add validation before proceeding
-    if (currentStep === 0 && !shippingAddress) {
-      message.error("Please submit your shipping address.");
-      return;
-    }
+    // Remove check for step 0, as form submission handles it
+    // if (currentStep === 0 && !shippingAddress) {
+    //   message.error("Please submit your shipping address.");
+    //   return;
+    // }
     if (currentStep === 1 && !paymentMethod) {
       message.error("Please select a payment method.");
       return;

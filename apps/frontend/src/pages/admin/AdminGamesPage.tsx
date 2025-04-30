@@ -13,6 +13,7 @@ import {
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Game, GameListingResponse } from "@/gen/types"; // Generated API types
+import { type GameControllerListGamesQueryParams } from "@/gen/types/GameControllerListGames";
 import { useGameControllerListGames } from "@/gen/query/GamesHooks"; // Import the SWR hook
 import type { ColumnsType } from "antd/es/table";
 import type { Key } from "react";
@@ -34,6 +35,34 @@ const AdminGamesPage: React.FC = () => {
     order?: "ascend" | "descend";
   }>({}); // Add sorter state
 
+  // Derive API parameters from local state
+  const apiQueryParams = useMemo(() => {
+    const skip = (pagination.current - 1) * pagination.pageSize;
+    const limit = pagination.pageSize;
+    // Map antd sorter field to potential API field names if necessary
+    // Example: const apiSortField = sorter.field === 'title' ? 'name' : sorter.field;
+    const apiSortField = sorter.field;
+    // Convert antd sorter order to API's boolean `is_asc` parameter
+    const isAscending =
+      sorter.order === "ascend"
+        ? true
+        : sorter.order === "descend"
+          ? false
+          : undefined;
+
+    // Construct the params object, filtering out undefined values
+    const params: GameControllerListGamesQueryParams = {};
+    if (skip !== undefined) params.skip = skip;
+    if (limit !== undefined) params.limit = limit;
+    if (apiSortField !== undefined) params.sort_by = apiSortField;
+    // Use the correct boolean parameter name for sorting direction
+    if (isAscending !== undefined) params.is_asc = isAscending;
+
+    // Add any other static filters if needed here
+
+    return params;
+  }, [pagination, sorter]);
+
   // --- Fetch Games using SWR Hook --- //
   const {
     data: response, // Raw SWR response
@@ -41,13 +70,16 @@ const AdminGamesPage: React.FC = () => {
     isLoading,
     mutate, // SWR mutate function
   } = useGameControllerListGames(
-    undefined, // No request body for GET
-
+    // Pass API query parameters as the first argument
+    apiQueryParams,
+    // Pass SWR/React Query options as the second argument, nested under 'query'
     {
       query: {
+        // SWR options
         keepPreviousData: true, // Keep showing old data while loading new page
         revalidateOnFocus: false, // Optional: prevent refetch on window focus
       },
+      // Add client config if needed
     }
   );
 

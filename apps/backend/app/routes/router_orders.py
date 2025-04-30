@@ -1,14 +1,15 @@
 import logging
+import uuid
+from typing import List, Dict, Any, Optional
 from datetime import datetime
-from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
-from deps import AdminUser, CurrentUser, DbDep
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from prisma import Prisma
-from prisma.errors import PrismaError
-from prisma.models import Game, Order, OrderItem
+from prisma.models import Order, OrderItem, Game
+from prisma.errors import PrismaError, RecordNotFoundError
+
+from app.core.deps import DbDep, CurrentUser
 
 # --- Define Local Pydantic Models ---
 
@@ -21,7 +22,7 @@ class GameItem(Game, BaseModel):
 
 class OrderItemResponse(OrderItem, BaseModel):
     # Fields like id, order_id, game_id, quantity, price_at_purchase inherited
-    game: GameItem | None = None
+    game: Optional[GameItem] = None
 
     class Config:
         from_attributes = True
@@ -29,29 +30,10 @@ class OrderItemResponse(OrderItem, BaseModel):
 
 class OrderResponse(Order, BaseModel):
     # Fields like id, user_id, status, total_amount, order_date inherited
-    order_items: list[OrderItemResponse] = []
+    order_items: List[OrderItemResponse] = []
 
     class Config:
         from_attributes = True
-
-
-class OrderSummary(BaseModel):
-    id: str
-    order_date: datetime
-    customer_email: str
-    total_amount: float
-    status: str
-    item_count: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class OrderListResponse(BaseModel):
-    items: list[OrderSummary]
-    total: int
-    page: int
-    limit: int
-    skip: int
 
 
 # --- Input Schemas ---
@@ -63,7 +45,7 @@ class OrderCreate(BaseModel):
     # except maybe contact info if not tied to user profile.
     # This schema might be simplified depending on actual API contract.
     customer_email: str = Field(..., examples=["customer@example.com"])
-    customer_phone: str | None = Field(None, examples=["123-456-7890"])
+    customer_phone: Optional[str] = Field(None, examples=["123-456-7890"])
     # Other fields like address might be added here if needed
 
 
@@ -79,7 +61,7 @@ router = APIRouter()
 
 async def get_cart_items_for_user_prisma(
     user_id: str, db: Prisma
-) -> list[dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     """Fetches cart items and formats them for order creation using Prisma."""
     try:
         cart = await db.shoppingcart.find_unique(
@@ -259,135 +241,48 @@ async def create_order(
 
 
 @router.get(
-    "/", response_model=OrderListResponse, operation_id="OrderController_listOrders"
+    "/",
+    response_model=List[OrderResponse],
+    operation_id="OrderController_getMyOrders",
 )
-async def read_orders(
+async def get_my_orders(
     db: DbDep,
     current_user: CurrentUser,
-    # Pagination
-    skip: int = Query(0, ge=0, description="Number of orders to skip"),
-    limit: int = Query(
-        20, ge=1, le=100, description="Maximum number of orders per page"
-    ),
-    # Sorting
-    sort_by: str = Query(
-        "order_date",
-        description="Field to sort by (e.g., order_date, total_amount, status)",
-    ),
-    sort_order: str = Query(
-        "desc", pattern="^(asc|desc)$", description="Sort order: 'asc' or 'desc'"
-    ),
-    # Filtering (User + Admin)
-    status: Optional[str] = Query(None, description="Filter by order status"),
-    start_date: Optional[datetime] = Query(
-        None, description="Filter orders placed on or after this date/time"
-    ),
-    end_date: Optional[datetime] = Query(
-        None, description="Filter orders placed on or before this date/time"
-    ),
-    # Filtering (Admin Only)
-    user_id: Optional[str] = Query(
-        None, description="(Admin) Filter by specific user ID"
-    ),
-    customer_email: Optional[str] = Query(
-        None, description="(Admin) Filter by customer email (case-insensitive)"
-    ),
-) -> OrderListResponse:
-    """
-    Retrieve a list of orders with filtering, sorting, and pagination.
-    - Regular users see only their own orders.
-    - Admin users can see all orders and use admin-specific filters.
-    """
-    # Determine if the user is an admin
-    # Adjust this check based on how admin status is stored (e.g., role in token, metadata)
-    is_admin = current_user.app_metadata.get("claims_admin") is True
+    skip: int = 0,
+    limit: int = 100,
+    status: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> List[OrderResponse]:
+    """Retrieve the authenticated user's order history using Prisma."""
+    user_id = current_user.id
+    logger.info(
+        f"Fetching orders for user: {user_id}, skip: {skip}, limit: {limit}, "
+        f"status: {status}, start: {start_date}, end: {end_date}"
+    )
 
-    # Build WHERE clause
-    where_clause = {}
-
-    # Mandatory filter for non-admins
-    if not is_admin:
-        where_clause["user_id"] = current_user.id
-    elif user_id:  # Admin filter by user_id
-        where_clause["user_id"] = user_id
-
-    # Common filters
+    where_clause = {"user_id": user_id}
     if status:
         where_clause["status"] = status
     if start_date:
         where_clause["order_date"] = {"gte": start_date}
     if end_date:
+        # Add time component or adjust logic if needed for inclusive end date
         if "order_date" in where_clause:
+            # If start_date was already set, add lte to the existing dict
             where_clause["order_date"]["lte"] = end_date
         else:
             where_clause["order_date"] = {"lte": end_date}
 
-    # Admin-only filters
-    if is_admin and customer_email:
-        where_clause["customer_email"] = {
-            "contains": customer_email,
-            "mode": "insensitive",
-        }
-    elif not is_admin and (user_id or customer_email):
-        # Prevent non-admins from using admin filters
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions to filter by user_id or customer_email",
-        )
-
-    # Build ORDER BY clause
-    # Map API sort fields to Prisma model fields if necessary
-    sort_field_map = {
-        "order_date": "order_date",
-        "total_amount": "total_amount",
-        "status": "status",
-        "customer_email": "customer_email",
-    }
-    # prisma_sort_field = sort_field_map.get(
-    #     sort_by, "order_date"
-    # )  # Default to order_date
-    # order_by_clause = [{prisma_sort_field: sort_order}]
-
-    try:
-        # Get total count
-        total = await db.order.count(where=where_clause)
-
-        # Get paginated orders with item count included
-        orders_db = await db.order.find_many(
-            where=where_clause,
-            skip=skip,
-            take=limit,
-            # Include the count of related order_items
-        )
-
-        # Map to response model
-        order_summaries = [
-            OrderSummary(
-                id=o.id,
-                order_date=o.order_date,
-                customer_email=o.customer_email,
-                total_amount=o.total_amount,
-                status=o.status,
-                item_count=o.count.order_items if o.count else 0,  # Access the count
-            )
-            for o in orders_db
-        ]
-
-    except PrismaError as e:
-        # Log the detailed error for debugging
-        logger.error(f"Database error fetching orders: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="An error occurred while fetching orders.",
-        )
-
-    # Calculate current page number
-    page = (skip // limit) + 1
-
-    return OrderListResponse(
-        items=order_summaries,
-        total=total,
-        page=page,
-        limit=limit,
+    orders = await db.order.find_many(
+        where=where_clause,
+        order_by={"order_date": "desc"},
         skip=skip,
+        take=limit,
+        include={
+            "order_items": {"include": {"game": True}}
+        },  # Include details for response
     )
+
+    # Validate each order against the local Pydantic model
+    return [OrderResponse.model_validate(order) for order in orders]

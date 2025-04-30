@@ -1,87 +1,183 @@
-import React from "react";
-import { Layout, Typography, Table, Tag } from "antd";
+import React, { useState, useMemo } from "react";
+import {
+  Layout,
+  Table,
+  Typography,
+  Spin,
+  Alert,
+  Row,
+  // Modal, // Add later if needed for actions
+  // message, // Add later if needed for actions
+  // Button, // Add later if needed for actions
+  // Space, // Add later if needed for actions
+} from "antd";
+// import { EditOutlined, DeleteOutlined } from '@ant-design/icons'; // Add later for actions
+import { OrderSummary, OrderListResponse } from "@/gen/types"; // Adjust path if needed
+import { type OrderControllerListOrdersQueryParams } from "@/gen/types/OrderControllerListOrders"; // Adjust path if needed
+import { useOrderControllerListOrders } from "@/gen/query/OrdersHooks"; // Adjust path if needed
+import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
+import type { SorterResult, FilterValue } from "antd/es/table/interface";
 
 const { Content } = Layout;
 const { Title } = Typography;
 
-// Placeholder data structure for orders
-interface Order {
-  id: string | number;
-  customer: string;
-  date: string;
-  status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled";
-  total: number;
-}
-
-// Placeholder data
-const mockOrders: Order[] = [
-  {
-    id: "ORD-001",
-    customer: "user1@example.com",
-    date: "2023-10-27",
-    status: "Delivered",
-    total: 74.98,
-  },
-  {
-    id: "ORD-002",
-    customer: "user2@testing.com",
-    date: "2023-10-28",
-    status: "Shipped",
-    total: 14.99,
-  },
-  {
-    id: "ORD-003",
-    customer: "user1@example.com",
-    date: "2023-10-29",
-    status: "Processing",
-    total: 104.97,
-  },
-];
-
 /**
- * @description Placeholder admin page for viewing orders.
+ * @description Admin page for viewing and managing orders.
  * @returns {React.FC} The AdminOrdersPage component.
  */
 const AdminOrdersPage: React.FC = () => {
-  const columns = [
-    { title: "Order ID", dataIndex: "id", key: "id" },
-    { title: "Customer", dataIndex: "customer", key: "customer" },
-    { title: "Date", dataIndex: "date", key: "date" },
+  const [pagination, setPagination] = useState<TablePaginationConfig>({
+    current: 1,
+    pageSize: 10,
+    showSizeChanger: true,
+  });
+  const [sorter, setSorter] = useState<SorterResult<OrderSummary>>({});
+
+  // --- Derive API Query Params ---
+  const apiQueryParams = useMemo(() => {
+    const params: OrderControllerListOrdersQueryParams = {
+      skip: pagination.current
+        ? (pagination.current - 1) * (pagination.pageSize ?? 10)
+        : 0,
+      limit: pagination.pageSize ?? 10,
+    };
+    // Handle sorting - map AntD sorter to API params
+    if (sorter.field && sorter.order) {
+      // Assuming API uses 'sort_by' and 'is_asc' like games endpoint
+      // Adjust field names if the Order API uses different ones
+      params.sort_by = String(sorter.field); // Convert keyof OrderSummary to string
+      // Correctly use sort_order based on type definition
+      params.sort_order = sorter.order === "ascend" ? "asc" : "desc";
+    }
+
+    return params;
+  }, [pagination, sorter]);
+
+  // --- Fetch Orders using Hook ---
+  const {
+    data: response,
+    error: fetchError,
+    isLoading,
+    // mutate, // Add later if needed for actions
+  } = useOrderControllerListOrders(apiQueryParams, {
+    query: {
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    },
+  });
+
+  // --- Process API Response ---
+  const { orders, total } = useMemo(() => {
+    const items: OrderSummary[] = response?.data?.items ?? [];
+    const totalCount: number = response?.data?.total ?? 0;
+    return { orders: items, total: totalCount };
+  }, [response]);
+
+  // --- Table Columns Definition ---
+  const columns: ColumnsType<OrderSummary> = [
+    {
+      title: "Order ID",
+      dataIndex: "id",
+      key: "id",
+      sorter: true,
+      render: (id: string) => <code>{id.substring(0, 8)}...</code>, // Shorten UUID
+    },
+    {
+      title: "Order Date",
+      dataIndex: "order_date",
+      key: "order_date",
+      sorter: true,
+      render: (date: string) => new Date(date).toLocaleString(),
+      defaultSortOrder: "descend",
+    },
+    {
+      title: "Customer Email",
+      dataIndex: "customer_email",
+      key: "customer_email",
+      sorter: true,
+    },
+    {
+      title: "Total Amount",
+      dataIndex: "total_amount",
+      key: "total_amount",
+      sorter: true,
+      render: (amount: number) => `$${amount.toFixed(2)}`, // Format currency
+    },
+    {
+      title: "Item Count",
+      dataIndex: "item_count",
+      key: "item_count",
+      sorter: false, // Usually not useful to sort by count
+    },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      render: (status: string) => {
-        let color = "geekblue";
-        if (status === "Delivered") color = "green";
-        if (status === "Shipped") color = "cyan";
-        if (status === "Processing") color = "processing";
-        if (status === "Cancelled") color = "red";
-        return <Tag color={color}>{status.toUpperCase()}</Tag>;
-      },
+      sorter: true,
+      // TODO: Add tag/color based on status
     },
-    {
-      title: "Total",
-      dataIndex: "total",
-      key: "total",
-      render: (total: number) => `$${total.toFixed(2)}`,
-    },
-    // TODO: Add Actions column (View Details)
+    // { // Placeholder for actions column
+    //   title: 'Actions',
+    //   key: 'actions',
+    //   align: 'center' as const,
+    //   render: (_: any, record: OrderSummary) => (
+    //     <Space size="small">
+    //       <Button size="small">View</Button>
+    //       {/* Add Edit/Update Status later */}
+    //     </Space>
+    //   ),
+    // },
   ];
 
+  // --- Table Change Handler ---
+  const handleTableChange = (
+    newPagination: TablePaginationConfig,
+    // Use the correct FilterValue type from antd
+    filters: Record<string, FilterValue | null>,
+    newSorter: SorterResult<OrderSummary> | SorterResult<OrderSummary>[] // Can be array
+  ) => {
+    setPagination(newPagination);
+    // Handle single or multiple sorters (take the first if multiple)
+    setSorter(Array.isArray(newSorter) ? newSorter[0] : newSorter);
+  };
+
   return (
-    <Layout>
+    <Layout style={{ padding: 16 }}>
       <Content>
-        <Title level={3} style={{ marginBottom: 16 }}>
-          Manage Orders
-        </Title>
-        {/* Add filtering/search options here later */}
-        <Table
+        <Row
+          justify="space-between"
+          align="middle"
+          style={{ marginBottom: 16 }}
+        >
+          <Title level={3} style={{ margin: 0 }}>
+            Manage Orders
+          </Title>
+          {/* Add Filter/Create buttons later if needed */}
+        </Row>
+
+        {fetchError && (
+          <Alert
+            message="Error loading orders"
+            description={
+              fetchError instanceof Error
+                ? fetchError.message
+                : "Failed to fetch order data."
+            }
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        <Table<OrderSummary> // Explicitly type the Table
           columns={columns}
-          dataSource={mockOrders}
+          dataSource={orders}
           rowKey="id"
+          loading={isLoading}
+          pagination={{ ...pagination, total }}
+          onChange={handleTableChange}
           bordered
-          // TODO: Add loading state when API is implemented
+          size="middle"
         />
       </Content>
     </Layout>

@@ -1,21 +1,26 @@
 import { createContext, useContextSelector } from "use-context-selector";
 import { useState, useEffect, ReactNode, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient"; // Import Supabase client
-import { User } from "@supabase/supabase-js"; // Use Supabase User type directly
-import type { Session, Provider } from "@supabase/supabase-js"; // Import Session type
+import {
+  User as SupabaseUser,
+  Session as SupabaseSession,
+} from "@supabase/supabase-js"; // Use Supabase User type directly
+import type { Provider } from "@supabase/supabase-js"; // Import Session type
+import { message } from "antd";
 
-// --- Remove local Credentials and UserData interfaces ---
-// They will be inferred or use Supabase types directly
-
-// --- Remove local User interface ---
-// We will use the User type from @supabase/supabase-js
+// Export the User type
+export type User = SupabaseUser & {
+  // Add any custom fields you might attach later
+  username?: string; // Add username if it's part of your user concept
+  role?: string;
+};
 
 /**
  * @description Defines the shape of the authentication context value.
  * Uses Supabase Session and User types.
  */
 interface AuthContextValue {
-  session: Session | null;
+  session: SupabaseSession | null;
   user: User | null;
   loading: boolean;
   error: string | null;
@@ -33,6 +38,7 @@ interface AuthContextValue {
   signInWithProvider: (params: { provider: Provider }) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  logout: () => Promise<void>;
 }
 
 // --- Update default context values ---
@@ -52,6 +58,7 @@ const AuthContext = createContext<AuthContextValue>({
   clearError: () => {
     throw new Error("AuthProvider not found");
   },
+  logout: async () => Promise.reject(new Error("AuthProvider not found")),
 });
 
 // Define props for the provider component
@@ -66,7 +73,7 @@ interface AuthProviderProps {
  * @returns {JSX.Element} The provider component.
  */
 export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<SupabaseSession | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -230,7 +237,30 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
     setError(null);
   }, []);
 
-  // --- Update Context Value ---
+  // Logout Action
+  const logout = useCallback(async () => {
+    setLoading(true); // Indicate loading during sign out
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setLoading(false);
+      setSession(null);
+      setUser(null);
+      message.success("Logged out successfully.");
+      // Clear other potentially sensitive caches/state here if needed
+      // e.g., manually clear React Query cache for user-specific data
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      message.error(error.message || "Failed to log out.");
+      // Even on error, try to clear local state
+      setLoading(false);
+      setSession(null);
+      setUser(null);
+    }
+  }, [supabase.auth]);
+
+  // --- Memoized Context Value ---
   const value: AuthContextValue = useMemo(
     () => ({
       session,
@@ -244,6 +274,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
       signInWithProvider,
       signOut,
       clearError,
+      logout,
     }),
     [
       session,
@@ -257,6 +288,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
       signInWithProvider,
       signOut,
       clearError,
+      logout,
     ]
   );
 

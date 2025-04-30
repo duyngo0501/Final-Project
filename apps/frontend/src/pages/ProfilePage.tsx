@@ -22,6 +22,9 @@ import {
 } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 
+// Import the specific SWR query hook for listing orders
+import { useOrderControllerListOrders } from "@/gen/query/OrdersHooks/useOrderControllerListOrders"; // Adjust path/name if needed
+
 // Import the new components
 import EditProfileForm from "@/components/profile/EditProfileForm";
 import ChangePasswordForm from "@/components/profile/ChangePasswordForm";
@@ -58,6 +61,20 @@ const ProfilePage = (): JSX.Element => {
   // Loading states for form submissions
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Call the hook unconditionally at the top level
+  const {
+    data: ordersResponse,
+    isLoading: isLoadingOrders,
+    error: ordersError,
+  } = useOrderControllerListOrders();
+  // Pass API query params directly if needed (e.g., pagination, sorting)
+  // Example: { skip: 0, limit: 10, sort_by: 'order_date', sort_order: 'desc' },
+  // Add TanStack Query options here
+  // { // Remove this options object
+  //   // Only run the query when the order history section is active
+  //   enabled: activeSection === 'order-history', // Remove this line
+  // } // Remove this line // Remove the options argument if it's not accepted
 
   /**
    * Mock handler for successful profile update.
@@ -163,27 +180,48 @@ const ProfilePage = (): JSX.Element => {
     );
   }
 
-  const renderSection = () => {
+  // Modified to accept order data as props
+  const renderSection = (
+    orderData: any,
+    orderLoading: boolean,
+    orderError: any
+  ) => {
     switch (activeSection) {
       case "edit-profile":
         return (
           <EditProfileForm
-            initialUserData={user} // Pass current user data
-            onFinish={handleUpdateProfile} // Use the new async handler
-            isLoading={isUpdatingProfile} // Pass loading state
-            // onCancel={handleCancel} // Add if needed
+            initialUserData={user}
+            onFinish={handleUpdateProfile}
+            isLoading={isUpdatingProfile}
           />
         );
       case "change-password":
         return (
           <ChangePasswordForm
-            onFinish={handleChangePassword} // Use the new async handler
-            isLoading={isChangingPassword} // Pass loading state
-            // onCancel={handleCancel} // Add if needed
+            onFinish={handleChangePassword}
+            isLoading={isChangingPassword}
           />
         );
       case "order-history":
-        return <OrderHistory />;
+        // Remove hook call from here
+        // const { ... } = useOrderControllerListOrders(...);
+
+        // Log data for debugging (now passed in)
+        console.log("[ProfilePage] Orders Data (passed):", orderData);
+        console.log("[ProfilePage] Orders Loading (passed):", orderLoading);
+        console.log("[ProfilePage] Orders Error (passed):", orderError);
+
+        // Extract items from the passed data
+        const orderItems = orderData?.data?.items;
+
+        return (
+          <OrderHistory
+            orders={orderItems}
+            isLoading={orderLoading}
+            // Pass the error object directly, OrderHistory handles type checking
+            error={orderError}
+          />
+        );
       case "settings":
         return <UserSettings />;
       case "view":
@@ -288,7 +326,8 @@ const ProfilePage = (): JSX.Element => {
           </Title>
         )}
 
-        {renderSection()}
+        {/* Pass order data to renderSection */}
+        {renderSection(ordersResponse, isLoadingOrders, ordersError)}
       </Card>
     </div>
   );
