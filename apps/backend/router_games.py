@@ -1,14 +1,17 @@
 from datetime import datetime  # Add datetime for Pydantic models
-from typing import Any
+from typing import Any, Optional  # Added Optional
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, Request
 from pydantic import BaseModel, Field  # Import BaseModel and Field
 
+# Remove deps import
+# from deps import DbDep
+# Add direct db import
 from db import get_db
 
 # Dependencies
-from deps import AdminUser, DbDep  # DbDep should now provide Prisma Client
-from prisma import Client as PrismaClient  # Import Prisma client type
+from prisma import Client as PrismaClient  # Keep PrismaClient for type hinting
 
 # Import Prisma errors and client type
 from prisma.errors import PrismaError, RecordNotFoundError, UniqueViolationError
@@ -45,6 +48,9 @@ class SyncResponse(BaseModel):
 #     GameCreateSchema,
 # )
 
+# Define logger (if not already defined globally)
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 # --- Remove Placeholder Data ---
@@ -60,18 +66,21 @@ router = APIRouter()
 )
 async def list_games(
     request: Request,
-    skip: int = 0,
-    limit: int = 10,
-    search: str = "",
-    sort_by: str = "",
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    search: str | None = Query(None),
+    sort_by: str | None = Query(None),
     is_asc: bool = True,
-) -> Any:
-    db = await get_db()
+) -> GameListingResponse:
     """
     Retrieve a list of games from the local database with pagination using Prisma.
     Optionally filter by search term, and sort the results.
     Returns raw Prisma Game objects along with pagination info.
     """
+    # --- Manual DB Fetch ---
+    db = await get_db()
+    # ---------------------
+
     # --- Build Prisma Query ---
     where_clause = {}
     if search:
@@ -129,12 +138,13 @@ async def list_games(
     operation_id="GameController_createGame",
 )
 async def create_game_endpoint(
-    *,
-    db: PrismaClient = Depends(DbDep),
+    request: Request, 
     game_in: GameCreateSchema,  # Use local GameCreateSchema
-    admin_user: AdminUser,
 ):
     """Create a new game. Returns the created game validated against the local model."""
+    # --- Manual DB Fetch ---
+    db = await get_db()
+    # ---------------------
     try:
         # Ensure relations (platforms, categories) are handled if part of GameCreateSchema
         # This example assumes GameCreateSchema only contains direct Game fields
@@ -167,9 +177,13 @@ async def create_game_endpoint(
     operation_id="GameController_deleteGame",
 )
 async def delete_game_endpoint(
-    *, db: PrismaClient = Depends(DbDep), game_id: str, admin_user: AdminUser
+    request: Request,
+    game_id: str,
 ):
     """Delete a game by its local ID."""
+    # --- Manual DB Fetch ---
+    db = await get_db()
+    # ---------------------
     try:
         await db.game.delete(where={"id": game_id})
     except RecordNotFoundError:
@@ -198,10 +212,13 @@ async def delete_game_endpoint(
     description="Retrieve detailed information for a specific game by its UUID.",
 )
 async def get_game_details(
+    request: Request,
     game_id: str = Path(..., description="The UUID of the game to retrieve"),
-    db: PrismaClient = Depends(DbDep),
 ):
     """Retrieves detailed game info including platforms/categories as raw Prisma object."""
+    # --- Manual DB Fetch ---
+    db = await get_db()
+    # ---------------------
     try:
         db_game = await db.game.find_unique(where={"id": game_id})
     except PrismaError as e:

@@ -5,9 +5,9 @@ including client creation and user validation from JWT tokens.
 """
 
 import logging
-from typing import Annotated
+from typing import Annotated, Optional
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from config import settings
@@ -28,13 +28,6 @@ async def get_super_client() -> AsyncClient:
     Raises:
         HTTPException: If the Supabase client fails to initialize (status 500).
     """
-    # --- Remove logging for debugging --- #
-    # logging.info(f"Attempting to create Supabase client.")
-    # logging.info(f"Using SUPABASE_URL: {settings.SUPABASE_URL}")
-    # logging.info(
-    #     f"SUPABASE_KEY is set: {bool(settings.SUPABASE_KEY)}"
-    # )
-    # --------------------------------- #
     try:
         super_client = await create_client(
             settings.SUPABASE_URL,
@@ -43,74 +36,77 @@ async def get_super_client() -> AsyncClient:
                 postgrest_client_timeout=10, storage_client_timeout=10
             ),
         )
-        # Basic check if client object was created
         if not super_client:
-            # This path might be unlikely if create_client raises exceptions,
-            # but included for robustness.
             raise ValueError("Supabase client creation returned None")
         return super_client
     except Exception as e:
-        # --- Add detailed exception logging --- #
         logging.error(
             f"Detailed error initializing Supabase client: {type(e).__name__} - {repr(e)}"
         )
-        # -------------------------------------- #
         logging.error(f"Failed to initialize Supabase super client: {e}")
         raise HTTPException(
             status_code=500, detail="Supabase admin client could not be initialized"
         )
 
-
-# Dependency type hint for the Supabase admin client.
+# This dependency type hint might still be useful internally or in other parts of the app
 SuperClient = Annotated[AsyncClient, Depends(get_super_client)]
 
 
 # OAuth2 Password Bearer scheme for extracting tokens from Authorization header.
+# This part remains the same, routers will call it manually
 reusable_oauth2 = OAuth2PasswordBearer(
-    # Points to the API endpoint that issues the token (used by Swagger UI).
-    tokenUrl=f"{settings.API_V1_STR}/auth/login"
+    tokenUrl=f"{settings.API_V1_STR}/auth/login",
+    auto_error=False # Set auto_error=False so it returns None if header is missing, allowing manual handling
 )
 
-# Dependency type hint for the token extracted by reusable_oauth2.
-TokenDep = Annotated[str, Depends(reusable_oauth2)]
 
-
-async def get_current_user(token: TokenDep, super_client: SuperClient) -> SupabaseUser:
-    """FastAPI dependency to validate a JWT and retrieve the current user.
-
-    Uses the Supabase admin client to verify the token and fetch user details.
+# Modified get_current_user
+async def get_current_user(token: str) -> SupabaseUser:
+    """Validates a JWT and retrieves the current user by creating its own Supabase client.
 
     Args:
-        token: The JWT token extracted from the Authorization header.
-        super_client: The injected Supabase admin client dependency.
+        token: The JWT token extracted manually (e.g., via reusable_oauth2).
 
     Returns:
         SupabaseUser: A Pydantic model containing the validated user's details.
 
     Raises:
         HTTPException (401): If the token is invalid, expired, or fails validation.
-        HTTPException (404): If the user associated with a valid token is not found.
-                           (Less common with JWTs, but possible).
-        HTTPException (500): If there's an unexpected error during Supabase interaction.
+        HTTPException (500): If the Supabase client fails or other unexpected errors occur.
     """
+    super_client: AsyncClient | None = None
     try:
+        # Create the super_client internally
+        super_client = await get_super_client()
+        
+        # Validate token using the internal client
         user_rsp = await super_client.auth.get_user(jwt=token)
+        
         if not user_rsp or not user_rsp.user:
-            # Consider if 404 is appropriate, 401 might be better for bad tokens
             logging.warning("Token validation failed or user not found for token.")
             raise HTTPException(
-                status_code=401,
+                status_code=status.HTTP_401_UNAUTHORIZED, # Use status.HTTP_401_UNAUTHORIZED
                 detail="Invalid authentication credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        return user_rsp.user
+        return user_rsp.user # Return the user object directly
+        
     except HTTPException as http_exc:
-        # Re-raise known HTTPExceptions (like the 401 above)
+        # Re-raise known HTTPExceptions (like the 401 above or 500 from get_super_client)
         raise http_exc
     except Exception as e:
-        # Catch unexpected errors from Supabase client or other issues
-        logging.error(f"Unexpected error validating token or getting user: {e}")
+        # Catch unexpected errors
+        logging.error(f"Unexpected error validating token or getting user: {e}", exc_info=True)
         raise HTTPException(
-            status_code=500, detail="Internal server error during authentication"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, # Use status.HTTP_500_INTERNAL_SERVER_ERROR
+            detail="Internal server error during authentication"
         )
+    finally:
+        # Ensure the internally created client session is closed (if applicable)
+        # Note: Supabase Python client typically manages connections internally,
+        # explicit close might not be needed unless using specific connection pooling.
+        # Check Supabase client docs if connection leaks become an issue.
+        # if super_client and hasattr(super_client, 'close'): # Example check
+        #     await super_client.close()
+        pass # Placeholder for potential cleanup if needed

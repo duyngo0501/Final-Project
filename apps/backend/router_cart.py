@@ -1,7 +1,12 @@
-from fastapi import APIRouter, HTTPException, status
+import logging
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, Field  # Import BaseModel and Field
 
-from deps import CurrentUser, DbDep  # Changed SessionDep
+from db import get_db
+from auth import get_current_user, reusable_oauth2
+from db_supabase import SupabaseUser
 from prisma import Prisma  # Import Prisma
 
 # Import Prisma errors for specific handling
@@ -55,6 +60,9 @@ class CartItemUpdate(BaseModel):
 #     CartResponseSchema,
 # )
 
+# Define logger
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -78,8 +86,7 @@ async def get_or_create_cart_prisma(
 
 @router.get("/", response_model=CartResponse, operation_id="CartController_getCart")
 async def read_cart(
-    db: DbDep,
-    current_user: CurrentUser,  # Changed session to db
+    request: Request,
 ) -> CartResponse:  # Update return type hint
     """Retrieve the current user's shopping cart using Prisma.
 
@@ -87,7 +94,34 @@ async def read_cart(
     and associated game information using Prisma's include. If no cart exists,
     a new empty cart is created.
     """
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+        
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error getting user for cart: {e.detail}")
+        raise e 
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for cart: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user for cart")
+    # --- End Manual Fetch ---
+    
     user_id = current_user.id
+    logger.info(f"Attempting to retrieve cart for user_id: {user_id}")
 
     try:
         # --- USE PRISMA DIRECTLY via helper ---
@@ -111,9 +145,8 @@ async def read_cart(
     operation_id="CartController_addItem",
 )
 async def add_item_to_cart(
-    item_in: CartItemCreate,  # Update input type hint
-    db: DbDep,  # Changed session to db
-    current_user: CurrentUser,
+    request: Request,
+    item_in: CartItemCreate,
 ) -> CartItemResponse:  # Update return type hint
     """Add an item to the shopping cart using Prisma.
 
@@ -121,6 +154,28 @@ async def add_item_to_cart(
     Uses Prisma upsert logic (find or create/update) to handle item quantity.
     A cart is created for the user if one doesn't exist.
     """
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+        
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error adding item: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for add item: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to add item")
+    # --- End Manual Fetch ---
+
     user_id = current_user.id
     game_id = item_in.game_id
     quantity = item_in.quantity
@@ -178,14 +233,35 @@ async def add_item_to_cart(
     operation_id="CartController_updateItemQuantity",
 )
 async def update_cart_item_quantity(
+    request: Request,
     game_id: str,
     item_in: CartItemUpdate,  # Update input type hint
-    db: DbDep,
-    current_user: CurrentUser,
 ) -> CartItemResponse:  # Update return type hint
     """Update the quantity of an item in the cart using Prisma.
     If quantity becomes 0 or less, the item is removed.
     """
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+        
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error updating item: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for update item: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to update item")
+    # --- End Manual Fetch ---
+
     user_id = current_user.id
     new_quantity = item_in.quantity
 
@@ -235,10 +311,34 @@ async def update_cart_item_quantity(
     operation_id="CartController_removeItem",
 )
 async def remove_item_from_cart(
-    game_id: str, db: DbDep, current_user: CurrentUser
+    request: Request,
+    game_id: str,
 ) -> None:
     """Remove an item from the shopping cart using Prisma."""
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error removing item: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for remove item: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to remove item")
+    # --- End Manual Fetch ---
+    
     user_id = current_user.id
+    logger.info(f"Removing game_id: {game_id} from cart for user_id: {user_id}")
 
     try:
         # Find the user's cart first
@@ -277,9 +377,34 @@ async def remove_item_from_cart(
 @router.delete(
     "/", status_code=status.HTTP_204_NO_CONTENT, operation_id="CartController_clearCart"
 )
-async def clear_cart(db: DbDep, current_user: CurrentUser) -> None:
+async def clear_cart(
+    request: Request,
+) -> None:
     """Clear all items from the user's shopping cart using Prisma."""
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error clearing cart: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for clear cart: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to clear cart")
+    # --- End Manual Fetch ---
+    
     user_id = current_user.id
+    logger.info(f"Clearing cart for user_id: {user_id}")
 
     try:
         # Find the user's cart

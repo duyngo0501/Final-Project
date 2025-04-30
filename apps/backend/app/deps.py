@@ -81,4 +81,4 @@ async def get_current_admin_user(
 
 # Dependency type hint for an admin user
 # Note: Depends() needs to implicitly get the Request object if needed by get_current_admin_user
-AdminUser = Annotated[SupabaseUser, Depends(get_current_admin_user)]
+# AdminUser = Annotated[SupabaseUser, Depends(get_current_admin_user)]

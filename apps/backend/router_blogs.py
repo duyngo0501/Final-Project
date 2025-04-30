@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 # Dependencies
-from deps import AdminUser, DbDep
+from deps import DbDep
 
 # Import Prisma errors
 from prisma.errors import PrismaError, RecordNotFoundError
@@ -41,7 +41,6 @@ router = APIRouter()
     "/",
     response_model=BlogResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(AdminUser)],
     operation_id="BlogController_createBlogPost",
 )
 async def create_blog_post(*, db: DbDep, blog_in: BlogCreate) -> BlogResponse:
@@ -107,7 +106,6 @@ async def read_blog_post(*, db: DbDep, post_id: str) -> BlogResponse:
 @router.put(
     "/{post_id}",
     response_model=BlogResponse,
-    dependencies=[Depends(AdminUser)],
     operation_id="BlogController_updateBlogPost",
 )
 async def update_blog_post(
@@ -134,7 +132,6 @@ async def update_blog_post(
 @router.delete(
     "/{post_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(AdminUser)],
     operation_id="BlogController_deleteBlogPost",
 )
 async def delete_blog_post(*, db: DbDep, post_id: str) -> None:

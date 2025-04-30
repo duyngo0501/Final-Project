@@ -2,13 +2,15 @@ import logging
 from datetime import datetime
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from deps import AdminUser, CurrentUser, DbDep
+from db import get_db
+from auth import get_current_user, reusable_oauth2
+from db_supabase import SupabaseUser
 from prisma import Prisma
 from prisma.errors import PrismaError
-from prisma.models import Game, Order, OrderItem
+from prisma.models import Game, Order, OrderItem, ShoppingCart, CartEntry
 
 # --- Define Local Pydantic Models ---
 
@@ -116,10 +118,12 @@ async def get_cart_items_for_user_prisma(
 async def clear_cart_for_user_prisma(user_id: str, db: Prisma):
     """Clears the user's cart using Prisma."""
     try:
+        # Need to find cart ID first
         cart = await db.shoppingcart.find_unique(where={"user_id": user_id})
 
         if cart:
-            await db.cart_entry.delete_many(where={"shopping_cart_id": cart.id})
+            # Delete CartEntry items associated with the cart ID
+            await db.cartentry.delete_many(where={"cart_id": cart.id}) # Use cart_id
             logger.info(f"Cleared cart for user {user_id}")
         else:
             logger.info(f"No cart found to clear for user {user_id}")
@@ -146,15 +150,37 @@ def format_currency(amount: float | None) -> str:
     operation_id="OrderController_createOrder",
 )
 async def create_order(
-    order_in: OrderCreate, db: DbDep, current_user: CurrentUser
+    request: Request,
+    order_in: OrderCreate,
 ) -> OrderResponse:
     """
     Place a new order using Prisma.
     Uses a transaction to ensure atomicity of order creation and cart clearing.
     """
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+        
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error creating order: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for create order: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to create order")
+    # --- End Manual Fetch ---
+    
     logger.info(f"Received order request from email: {order_in.customer_email}")
     user_id = current_user.id
-    user_name = current_user.user_metadata.get("full_name", current_user.email)
 
     # --- Start Transaction ---
     async with db.tx() as transaction:
@@ -262,14 +288,11 @@ async def create_order(
     "/", response_model=OrderListResponse, operation_id="OrderController_listOrders"
 )
 async def read_orders(
-    db: DbDep,
-    current_user: CurrentUser,
-    # Pagination
+    request: Request,
     skip: int = Query(0, ge=0, description="Number of orders to skip"),
     limit: int = Query(
         20, ge=1, le=100, description="Maximum number of orders per page"
     ),
-    # Sorting
     sort_by: str = Query(
         "order_date",
         description="Field to sort by (e.g., order_date, total_amount, status)",
@@ -277,7 +300,6 @@ async def read_orders(
     sort_order: str = Query(
         "desc", pattern="^(asc|desc)$", description="Sort order: 'asc' or 'desc'"
     ),
-    # Filtering (User + Admin)
     status: Optional[str] = Query(None, description="Filter by order status"),
     start_date: Optional[datetime] = Query(
         None, description="Filter orders placed on or after this date/time"
@@ -285,7 +307,6 @@ async def read_orders(
     end_date: Optional[datetime] = Query(
         None, description="Filter orders placed on or before this date/time"
     ),
-    # Filtering (Admin Only)
     user_id: Optional[str] = Query(
         None, description="(Admin) Filter by specific user ID"
     ),
@@ -298,9 +319,30 @@ async def read_orders(
     - Regular users see only their own orders.
     - Admin users can see all orders and use admin-specific filters.
     """
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+        
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error reading orders: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for read orders: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to read orders")
+    # --- End Manual Fetch ---
+    
     # Determine if the user is an admin
-    # Adjust this check based on how admin status is stored (e.g., role in token, metadata)
-    is_admin = current_user.app_metadata.get("claims_admin") is True
+    is_admin = getattr(current_user, 'app_metadata', {}).get("claims_admin") is True
 
     # Build WHERE clause
     where_clause = {}
@@ -357,10 +399,11 @@ async def read_orders(
             where=where_clause,
             skip=skip,
             take=limit,
-            # Include the count of related order_items
+            # order_by=order_by_clause, # Re-enable order by
+            include={'order_items': True} # Include items to count them
         )
 
-        # Map to response model
+        # Map to response model, calculating item count
         order_summaries = [
             OrderSummary(
                 id=o.id,
@@ -368,7 +411,7 @@ async def read_orders(
                 customer_email=o.customer_email,
                 total_amount=o.total_amount,
                 status=o.status,
-                item_count=o.count.order_items if o.count else 0,  # Access the count
+                item_count=len(o.order_items) if o.order_items else 0, # Calculate count
             )
             for o in orders_db
         ]

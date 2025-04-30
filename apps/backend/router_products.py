@@ -1,11 +1,11 @@
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 # Dependencies
-from deps import AdminUser, DbDep
+from deps import DbDep
 from prisma import Client as PrismaClient
 
 # Import Prisma errors, client and models
@@ -81,14 +81,13 @@ router = APIRouter()
     description="Retrieve a list of products/games with filtering, sorting, and pagination.",
 )
 async def list_products(
-    request: Request,
-    db: PrismaClient = Depends(DbDep),
-    skip: int = 0,
-    limit: int = 10,
-    search: str | None = None,
-    category: list[str] | None = None,
-    platform: list[str] | None = None,
-    sort_by: str | None = None,
+    db: DbDep,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(10, ge=1, le=100),
+    search: str | None = Query(None),
+    category: list[str] | None = Query(None),
+    platform: list[str] | None = Query(None),
+    sort_by: str | None = Query(None),
     is_asc: bool = True,
 ) -> GameListingResponse:
     """
@@ -157,10 +156,8 @@ async def list_products(
     operation_id="ProductController_createProduct",
 )
 async def create_product_endpoint(
-    *,
-    db: PrismaClient = Depends(DbDep),
+    db: DbDep,
     game_in: GameCreateSchema,
-    admin_user: AdminUser,
 ) -> GameResponse:
     """
     Create a new game/product (Admin only).
@@ -189,7 +186,8 @@ async def create_product_endpoint(
     operation_id="ProductController_deleteProduct",
 )
 async def delete_product_endpoint(
-    *, db: PrismaClient = Depends(DbDep), product_id: str, admin_user: AdminUser
+    db: DbDep,
+    product_id: str,
 ) -> None:
     """
     Delete a product/game by its ID (Admin only).
@@ -216,8 +214,8 @@ async def delete_product_endpoint(
     operation_id="ProductController_getProduct",
 )
 async def get_product_details(
+    db: DbDep,
     product_id: str = Path(..., description="The ID of the product/game to retrieve"),
-    db: PrismaClient = Depends(DbDep),
 ) -> GameResponse:
     """Retrieves detailed game info including platforms/categories using Prisma."""
     try:
