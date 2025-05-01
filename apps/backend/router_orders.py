@@ -2,7 +2,7 @@ import logging
 from datetime import datetime
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request, Path
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 # Direct imports (assuming apps/backend is in PYTHONPATH or handled by execution context)
@@ -13,7 +13,7 @@ from db_supabase import SupabaseUser
 
 # Imports for prisma - assuming handled by environment/installation
 from prisma import Prisma
-from prisma.errors import PrismaError
+from prisma.errors import PrismaError, RecordNotFoundError
 from prisma.models import Game, Order, OrderItem, ShoppingCart, CartEntry
 
 # --- Define Local Pydantic Models ---
@@ -464,3 +464,80 @@ async def read_orders(
         limit=limit,
         skip=skip,
     )
+
+# --- NEW ENDPOINT: Get Order Details --- #
+@router.get(
+    "/{order_id}",
+    response_model=OrderResponse, # Use the detailed response model
+    operation_id="OrderController_getOrderDetails",
+    summary="Get Order Details by ID",
+    description="Retrieve detailed information for a specific order, including line items and games.",
+)
+async def read_order_details(
+    request: Request,
+    order_id: str = Path(..., description="The ID of the order to retrieve"),
+) -> OrderResponse:
+    """Fetches a single order by its ID, ensuring user ownership.
+    
+    Includes nested order items and their associated game details.
+    """
+    # --- Manual Fetch DB and User ---
+    db = await get_db()
+    token: str | None = None
+    try:
+        token = await reusable_oauth2(request)
+    except HTTPException as e:
+        logger.error(f"Token extraction error fetching order {order_id}: {e.detail}")
+        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
+        
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        
+    try:
+        current_user: SupabaseUser = await get_current_user(token=token)
+    except HTTPException as e:
+        logger.error(f"Authentication error fetching order {order_id}: {e.detail}")
+        raise e 
+    except Exception as e:
+        logger.error(f"Unexpected error getting user for order {order_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to fetch order")
+    # --- End Manual Fetch ---
+
+    try:
+        order = await db.order.find_first(
+            where={
+                "id": order_id,
+                "user_id": current_user.id # Ensure the user owns the order
+            },
+            include={
+                "order_items": {
+                    "include": {
+                        "game": True # Include game details for each item
+                    }
+                }
+            }
+        )
+
+        if not order:
+            # Check if the user is an admin, if so, allow fetching any order
+            # (Optional: Add admin check logic here if needed)
+            # is_admin = getattr(current_user, 'app_metadata', {}).get("claims_admin") is True
+            # if is_admin:
+            #     order = await db.order.find_unique(...) # Fetch without user_id constraint
+            # if not order: # If still not found even for admin
+            #    raise HTTPException(status_code=404, detail=f"Order with id {order_id} not found")
+            # else: # Order found, but doesn't belong to the requesting user (if not admin)
+            raise HTTPException(status_code=404, detail=f"Order with id {order_id} not found or access denied")
+
+    except RecordNotFoundError: # Should be caught by find_first returning None, but good practice
+         logger.warning(f"Order {order_id} not found for user {current_user.id}")
+         raise HTTPException(status_code=404, detail=f"Order with id {order_id} not found")
+    except PrismaError as e:
+        logger.error(f"Database error fetching order {order_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An error occurred while fetching order details.")
+    except Exception as e:
+        logger.error(f"Unexpected error fetching order {order_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An unexpected server error occurred.")
+
+    # Validate against the detailed Pydantic model
+    return OrderResponse.model_validate(order)

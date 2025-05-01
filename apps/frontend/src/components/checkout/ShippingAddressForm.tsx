@@ -294,7 +294,7 @@ const zipPatterns: { [key: string]: RegExp } = {
  * @returns {React.FC<ShippingAddressFormProps>} The ShippingAddressForm component.
  */
 const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
-  initialValues = { country: "US" }, // Set default country here
+  initialValues = {},
   onSubmit,
   submitButtonText = "Save Address",
   isLoading = false, // Default loading to false
@@ -304,12 +304,6 @@ const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
 
   // Get selected country to apply conditional validation
   const selectedCountry = Form.useWatch("country", form);
-
-  // Reset fields when initialValues change
-  useEffect(() => {
-    form.resetFields();
-    form.setFieldsValue(initialValues); // Set initial values using form instance
-  }, [initialValues, form]);
 
   /**
    * @description Handles form submission via Ant Design Form's onFinish.
@@ -454,6 +448,7 @@ const ShippingAddressForm: React.FC<ShippingAddressFormProps> = ({
           <Form.Item
             label="Country"
             name="country"
+            initialValue="US"
             rules={[{ required: true, message: "Please select your country" }]}
           >
             <Select placeholder="Select country" showSearch optionFilterProp="children">

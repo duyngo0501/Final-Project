@@ -8,6 +8,7 @@ import {
   Dropdown,
   Space,
   Button,
+  message,
 } from "antd";
 import {
   ShoppingCartOutlined,
@@ -56,8 +57,21 @@ const Navbar: React.FC = () => {
 
   const handleLogout = () => {
     if (signOut) {
-      signOut().catch((err) => console.error("Sign out failed:", err));
+      signOut()
+        .then(() => {
+          // Show success message
+          message.success("Logged out successfully!");
+          // Navigate to the main page after successful sign out
+          navigate("/");
+        })
+        .catch((err) => {
+            // Optionally show an error message here too
+            message.error("Logout failed. Please try again.");
+            console.error("Sign out failed:", err)
+        });
     } else {
+      // This case should ideally not happen if AuthProvider is set up correctly
+      message.error("Logout action is unavailable.");
       console.error("SignOut function not available from AuthContext");
     }
   };
@@ -94,7 +108,7 @@ const Navbar: React.FC = () => {
     ? [
         {
           key: "/admin",
-          label: "Admin",
+          label: <Link to="/admin">Admin</Link>,
           icon: <AppstoreOutlined />,
           style: location.pathname.startsWith("/admin")
             ? menuItemHoverStyle

@@ -38,107 +38,37 @@ const mockUsers: User[] = [
   },
 ];
 
+// Filter mock data to only show admins
+const adminUsers = mockUsers.filter(user => user.role === 'admin');
+
 const { Content } = Layout;
 const { Title } = Typography;
 
 /**
- * @description Admin page for viewing and managing users.
+ * @description Admin page for viewing admin users.
  * @returns {React.FC} The AdminUsersPage component.
  */
 const AdminUsersPage: React.FC = () => {
   // Mock fetching state
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState<Error | null>(null);
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  // Initialize state with only admin users
+  const [users, setUsers] = useState<User[]>(adminUsers);
 
-  // Modal and Form state
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [form] = Form.useForm(); // Form instance for modal
+  // Remove Modal and Form state
+  // const [isModalVisible, setIsModalVisible] = useState(false);
+  // const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  // const [isSubmitting, setIsSubmitting] = useState(false);
+  // const [form] = Form.useForm(); // Form instance for modal
 
-  // Placeholder handlers for CRUD actions
-  const showAddModal = () => {
-    setEditingUser(null);
-    form.resetFields();
-    setIsModalVisible(true);
-  };
+  // Remove Placeholder handlers for CRUD actions
+  // const showAddModal = () => { ... };
+  // const showEditModal = (user: User) => { ... };
+  // const handleCancel = () => { ... };
+  // const handleFormSubmit = async (values: UserFormValues) => { ... };
+  // const handleDeleteUser = (user: User) => { ... };
 
-  const showEditModal = (user: User) => {
-    setEditingUser(user);
-    // Note: UserForm's useEffect handles setting form values excluding password
-    setIsModalVisible(true);
-  };
-
-  const handleCancel = () => {
-    setIsModalVisible(false);
-    setEditingUser(null);
-    form.resetFields();
-  };
-
-  /**
-   * @description Handles the submission of the UserForm (Add or Edit).
-   * @param {UserFormValues} values Form values from UserForm.
-   */
-  const handleFormSubmit = async (values: UserFormValues) => {
-    setIsSubmitting(true);
-    const isEditing = !!editingUser?.id;
-    const userData = { ...values, id: editingUser?.id || Date.now() }; // Assign ID for mock
-    console.log("Submitting User:", userData);
-
-    try {
-      // --- Mock API Call --- (Replace with actual API)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      if (isEditing) {
-        console.log("[Mock API] Updating user:", userData);
-        setUsers((prev) =>
-          prev.map((u) => (u.id === userData.id ? { ...u, ...userData } : u))
-        );
-        message.success(`User '${userData.username}' updated successfully!`);
-      } else {
-        console.log("[Mock API] Adding new user:", userData);
-        setUsers((prev) => [...prev, userData as User]); // Add new user (cast needed for mock ID)
-        message.success(`User '${userData.username}' added successfully!`);
-      }
-      // --- End Mock API Call ---
-
-      setIsModalVisible(false);
-      setEditingUser(null);
-      form.resetFields();
-    } catch (error: any) {
-      console.error("Failed to save user:", error);
-      message.error(error.message || "Failed to save user. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleDeleteUser = (user: User) => {
-    Modal.confirm({
-      title: `Delete User: ${user.username}?`,
-      content:
-        "Are you sure you want to delete this user? This action cannot be undone.",
-      okText: "Delete",
-      okType: "danger",
-      cancelText: "Cancel",
-      onOk: async () => {
-        try {
-          setIsSubmitting(true); // Use submitting flag for feedback
-          console.log("[Mock API] Deleting user:", user.id);
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          setUsers((prevUsers) => prevUsers.filter((u) => u.id !== user.id));
-          message.success(`User '${user.username}' deleted successfully!`);
-        } catch (error: any) {
-          console.error("Failed to delete user:", error);
-          message.error(error.message || "Failed to delete user.");
-        } finally {
-          setIsSubmitting(false);
-        }
-      },
-    });
-  };
-
-  // Define table columns
+  // Define table columns - Remove the 'Actions' column
   const columns: ColumnsType<User> = [
     {
       title: "ID",
@@ -167,37 +97,38 @@ const AdminUsersPage: React.FC = () => {
       dataIndex: "role",
       key: "role",
       width: 120,
-      filters: [
-        { text: "Admin", value: "admin" },
-        { text: "User", value: "user" },
-      ],
-      onFilter: (value: any, record) => record.role === value,
+      // Keep filters if you want to filter within admins, otherwise remove
+      // filters: [
+      //   { text: "Admin", value: "admin" },
+      // ],
+      // onFilter: (value: any, record) => record.role === value,
       render: (role: string) => (
         <Tag color={role === "admin" ? "volcano" : "geekblue"}>
           {role.toUpperCase()}
         </Tag>
       ),
     },
-    {
-      title: "Actions",
-      key: "actions",
-      width: 150,
-      align: "center" as const,
-      render: (_, record: User) => (
-        <Space size="middle">
-          <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
-            Edit
-          </Button>
-          <Button
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDeleteUser(record)}
-          >
-            Delete
-          </Button>
-        </Space>
-      ),
-    },
+    // Remove Actions column definition
+    // {
+    //   title: "Actions",
+    //   key: "actions",
+    //   width: 150,
+    //   align: "center" as const,
+    //   render: (_, record: User) => (
+    //     <Space size="middle">
+    //       <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
+    //         Edit
+    //       </Button>
+    //       <Button
+    //         danger
+    //         icon={<DeleteOutlined />}
+    //         onClick={() => handleDeleteUser(record)}
+    //       >
+    //         Delete
+    //       </Button>
+    //     </Space>
+    //   ),
+    // },
   ];
 
   return (
@@ -209,11 +140,12 @@ const AdminUsersPage: React.FC = () => {
           style={{ marginBottom: 16 }}
         >
           <Title level={3} style={{ margin: 0 }}>
-            Manage Users
+            Admin Accounts
           </Title>
-          <Button type="primary" icon={<PlusOutlined />} onClick={showAddModal}>
-            Add New User
-          </Button>
+          {/* Remove Add New User button */}
+          {/* <Button type="primary" icon={<PlusOutlined />} onClick={showAddModal}> */}
+          {/*   Add New User */}
+          {/* </Button> */}
         </Row>
 
         {isError && (
@@ -228,33 +160,14 @@ const AdminUsersPage: React.FC = () => {
 
         <Table
           columns={columns}
-          dataSource={users}
+          dataSource={users} // Now contains only admins
           rowKey="id"
           loading={isLoading}
           bordered
         />
 
-        {/* Add/Edit User Modal */}
-        <Modal
-          title={
-            editingUser?.id
-              ? `Edit User: ${editingUser.username}`
-              : "Add New User"
-          }
-          visible={isModalVisible}
-          onCancel={handleCancel}
-          confirmLoading={isSubmitting}
-          onOk={() => form.submit()} // Trigger form submission via internal button
-          destroyOnClose
-        >
-          <UserForm
-            formInstance={form}
-            initialValues={editingUser || undefined}
-            isEditing={!!editingUser?.id}
-            onFinish={handleFormSubmit}
-            isLoading={isSubmitting}
-          />
-        </Modal>
+        {/* Remove Add/Edit User Modal */}
+        {/* <Modal ... /> */}
       </Content>
     </Layout>
   );

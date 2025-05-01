@@ -85,9 +85,9 @@ const AdminLayout: React.FC = () => {
           <Menu.Item key="games" icon={<DatabaseOutlined />}>
             <Link to="/admin/games">Games</Link>
           </Menu.Item>
-          {/* <Menu.Item key="users" icon={<TeamOutlined />}>
+          <Menu.Item key="users" icon={<TeamOutlined />}>
             <Link to="/admin/users">Users</Link>
-          </Menu.Item> */}
+          </Menu.Item>
           <Menu.Item key="orders" icon={<ShoppingCartOutlined />}>
             <Link to="/admin/orders">Orders</Link>
           </Menu.Item>
