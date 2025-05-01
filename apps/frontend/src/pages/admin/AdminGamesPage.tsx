@@ -195,32 +195,58 @@ const AdminGamesPage: React.FC = () => {
       width: 150, // Adjust width if needed for UUIDs
     },
     {
-      title: "Title",
-      dataIndex: "title",
-      key: "title",
-      sorter: true, // Enable server-side sorting
+      title: "Image", // Added Image column
+      dataIndex: "background_image",
+      key: "image",
+      width: 100,
+      render: (image_url: string | null, record: Game) =>
+        image_url ? (
+          <img
+            src={image_url}
+            alt={record.name}
+            style={{ width: "80px", height: "auto", objectFit: "cover" }}
+          />
+        ) : (
+          "No Image"
+        ),
+      // No sorting for images
     },
     {
-      title: "Category",
-      dataIndex: "category",
-      key: "category",
-      width: 120,
+      title: "Title",
+      dataIndex: "name",
+      key: "name",
       sorter: true,
+    },
+    {
+      title: "Rating", // Added Rating column
+      dataIndex: "rating",
+      key: "rating",
+      width: 100,
+      sorter: true,
+      render: (rating: number | null) => rating?.toFixed(2) ?? "N/A",
+    },
+    {
+      title: "Release Date", // Added Release Date column
+      dataIndex: "released_date",
+      key: "release_date",
+      width: 130,
+      sorter: true,
+      render: (date: string | null) =>
+        date ? new Date(date).toLocaleDateString() : "N/A",
     },
     {
       title: "Price",
       dataIndex: "price",
       key: "price",
       width: 120,
-      render: (price: number, record: Game) => (
+      render: (price: number | null | undefined, record: Game) => (
         <span>
-          {/* Check for unavailable price based on mapping */}
-          {price < 0 ? (
-            <span style={{ fontStyle: "italic", color: "#888" }}>
-              Unavailable
-            </span>
+          {/* Check if price is null/undefined */}
+          {price === null || price === undefined ? (
+            <span style={{ fontStyle: "italic", color: "#888" }}>N/A</span>
           ) : (
-            <span>`$${price.toFixed(2)}`</span>
+            // Correctly format the price string
+            `$${price.toFixed(2)}`
           )}
         </span>
       ),
@@ -249,6 +275,14 @@ const AdminGamesPage: React.FC = () => {
       ),
     },
   ];
+
+  const handleFormSuccess = () => {
+    // This function will be called by GameForm on successful submission
+    setIsModalVisible(false);
+    setEditingGame(null);
+    mutate?.(); // Revalidate table data using SWR mutate
+    // message.success(...) is likely handled within GameForm now
+  };
 
   return (
     <Layout style={{ padding: 16 }}>
@@ -300,19 +334,17 @@ const AdminGamesPage: React.FC = () => {
           title={editingGame ? "Edit Game" : "Add New Game"}
           open={isModalVisible}
           onCancel={handleCancel}
-          footer={null} // Remove default footer
-          destroyOnClose
-          width={720}
+          footer={null} // Let the form handle buttons or provide custom footer
+          destroyOnClose // Reset form state when modal is closed
+          confirmLoading={isSubmitting} // Use local loading state for modal confirm visual
         >
-          {/* Render GameForm only when modal is intended to be visible */}
-          {isModalVisible && (
-            <GameForm
-              initialValues={editingGame}
-              onFinish={handleFormSubmit}
-              onCancel={handleCancel}
-              isLoading={isSubmitting}
-            />
-          )}
+          {/* Conditionally render form to help with state reset if needed */}
+          {/* Pass initialValues and onSubmitSuccess callback */}
+          <GameForm
+            initialValues={editingGame} // Pass game data for editing
+            onSubmitSuccess={handleFormSuccess} // Call this on successful API call within GameForm
+            onCancel={handleCancel} // Pass cancel handler
+          />
         </Modal>
       </Content>
     </Layout>

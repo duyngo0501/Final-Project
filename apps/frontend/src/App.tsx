@@ -16,6 +16,7 @@ import AdminGamesPage from "@/pages/admin/AdminGamesPage";
 import AdminUsersPage from "@/pages/admin/AdminUsersPage";
 import AdminOrdersPage from "@/pages/admin/AdminOrdersPage";
 import AdminPromotionsPage from "@/pages/admin/AdminPromotionsPage";
+import AdminBlogPage from "@/pages/admin/AdminBlogPage";
 import AdminProtectedRoute from "@/components/auth/AdminProtectedRoute";
 
 /**
@@ -33,7 +34,7 @@ function App(): JSX.Element {
               <Route index element={<HomePage />} />
               <Route path="games" element={<GamesPage />} />
               <Route path="blog" element={<BlogPage />} />
-              <Route path="blog/:postId" element={<BlogPostDetailPage />} />
+              <Route path="blog-detail" element={<BlogPostDetailPage />} />
               <Route
                 path="cart"
                 element={
@@ -67,6 +68,7 @@ function App(): JSX.Element {
                 <Route path="users" element={<AdminUsersPage />} />
                 <Route path="orders" element={<AdminOrdersPage />} />
                 <Route path="promotions" element={<AdminPromotionsPage />} />
+                <Route path="blog" element={<AdminBlogPage />} />
               </Route>
             </Route>
           </Routes>

@@ -1,41 +1,60 @@
-import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { Typography, Spin, Result, Button, Space, Breadcrumb } from "antd";
+import React from "react";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import {
+  Typography,
+  Spin,
+  Result,
+  Button,
+  Space,
+  Breadcrumb,
+  message,
+} from "antd";
 import {
   UserOutlined,
   CalendarOutlined,
   HomeOutlined,
 } from "@ant-design/icons";
-import { mockBlogPosts } from "@/mocks/blogMocks";
-import { BlogPost } from "@/types/blog";
+import { useGetBlogPostApiV1BlogsBlogIdGet } from "@/gen/query/BlogsHooks/index";
+import type { BlogResponseSchema } from "@/gen/types/index";
 
 const { Title, Paragraph, Text } = Typography;
 
 /**
  * @description Displays the full content of a single blog post.
- * Fetches post based on ID from URL params and uses mock data.
+ * Fetches post based on ID from URL query parameters.
  * Renders HTML content unsafely (requires sanitization in real app).
  * @returns {JSX.Element} The rendered blog post detail page.
  */
 const BlogPostDetailPage: React.FC = () => {
-  const { postId } = useParams<{ postId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [post, setPost] = useState<BlogPost | null | undefined>(undefined); // undefined means loading, null means not found
-  const [loading, setLoading] = useState<boolean>(true);
+  const postId = searchParams.get("id");
 
-  useEffect(() => {
-    setLoading(true);
-    // Simulate fetching data
-    const timer = setTimeout(() => {
-      const foundPost = mockBlogPosts.find((p) => p.id === postId);
-      setPost(foundPost || null); // Set to null if not found
-      setLoading(false);
-    }, 300); // Simulate network delay
+  const {
+    data: queryResponse,
+    error,
+    isLoading,
+  } = useGetBlogPostApiV1BlogsBlogIdGet(postId || "", {
+    shouldFetch: !!postId,
+  });
 
-    return () => clearTimeout(timer); // Cleanup timer on unmount
-  }, [postId]);
+  if (!postId) {
+    return (
+      <Result
+        status="warning"
+        title="Missing Post ID"
+        subTitle="Cannot display post without an ID."
+        extra={
+          <Button type="primary" onClick={() => navigate("/blog")}>
+            Back to Blog
+          </Button>
+        }
+        style={{ padding: "50px 0" }}
+      />
+    );
+  }
 
-  if (loading || post === undefined) {
+  if (isLoading) {
     return (
       <div
         style={{
@@ -50,12 +69,43 @@ const BlogPostDetailPage: React.FC = () => {
     );
   }
 
+  if (error) {
+    const status = (error as any)?.response?.status;
+    const detail = (error as any)?.response?.data?.detail;
+    const msg =
+      typeof error === "object" && error !== null && "message" in error
+        ? String(error.message)
+        : undefined;
+    const errorMsg = detail || msg || "Unknown error loading post";
+    message.error(`Error loading post: ${errorMsg}`);
+
+    return (
+      <Result
+        status={status === 404 ? "404" : "error"}
+        title={status === 404 ? "Post Not Found" : "Error Loading Post"}
+        subTitle={
+          status === 404
+            ? "Sorry, the blog post you requested does not exist."
+            : `Failed to load post: ${errorMsg}`
+        }
+        extra={
+          <Button type="primary" onClick={() => navigate("/blog")}>
+            Back to Blog
+          </Button>
+        }
+        style={{ padding: "50px 0" }}
+      />
+    );
+  }
+
+  const post = queryResponse?.data;
+
   if (!post) {
     return (
       <Result
-        status="404"
-        title="Post Not Found"
-        subTitle="Sorry, the blog post you visited does not exist."
+        status="warning"
+        title="Post Data Missing"
+        subTitle="Received a successful response but no post data was found."
         extra={
           <Button type="primary" onClick={() => navigate("/blog")}>
             Back to Blog
@@ -88,21 +138,21 @@ const BlogPostDetailPage: React.FC = () => {
         </span>
         <span>
           <CalendarOutlined style={{ marginRight: 8 }} />
-          {new Date(post.date + "T00:00:00").toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
+          {post.date
+            ? new Date(post.date).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })
+            : "No Date"}
         </span>
       </Space>
 
-      {/* Render HTML content - WARNING: Use with caution, sanitize in real apps */}
       <div
         className="blog-content"
-        dangerouslySetInnerHTML={{ __html: post.content }}
-        style={{ lineHeight: "1.7", fontSize: "16px" }} // Basic styling for content
+        dangerouslySetInnerHTML={{ __html: post.content ?? "" }}
+        style={{ lineHeight: "1.7", fontSize: "16px" }}
       />
-      {/* Add some basic styling for elements potentially in content */}
       <style>{`
             .blog-content h1, .blog-content h2, .blog-content h3 {
                 margin-top: 1.5em;

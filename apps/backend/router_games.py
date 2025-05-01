@@ -1,6 +1,7 @@
 from datetime import datetime  # Add datetime for Pydantic models
 from typing import Any, Optional  # Added Optional
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, Request
 from pydantic import BaseModel, Field  # Import BaseModel and Field
@@ -138,24 +139,68 @@ async def list_games(
     operation_id="GameController_createGame",
 )
 async def create_game_endpoint(
-    request: Request, 
+    request: Request,
     game_in: GameCreateSchema,  # Use local GameCreateSchema
 ):
-    """Create a new game. Returns the created game validated against the local model."""
+    """
+    Create a new game in the database.
+    Automatically generates a slug from the game name.
+    Requires admin privileges.
+    """
     # --- Manual DB Fetch ---
     db = await get_db()
     # ---------------------
-    try:
-        # Ensure relations (platforms, categories) are handled if part of GameCreateSchema
-        # This example assumes GameCreateSchema only contains direct Game fields
-        data_to_create = game_in.model_dump(exclude_unset=True)
-        # If GameCreateSchema includes platform/category names or IDs,
-        # you'd need logic here to connect them during creation.
-        new_game_prisma = await db.game.create(data=data_to_create)
-    except UniqueViolationError as e:
+
+    # --- Generate Slug --- #
+    base_slug = re.sub(r"[^a-z0-9]+", "-", game_in.name.lower()).strip("-")
+    # Handle potential empty slugs after stripping non-alphanumerics
+    if not base_slug:
+        base_slug = "game"  # Default slug if name was only symbols
+
+    # --- Check for Slug Uniqueness & Append Counter if Needed --- #
+    slug = base_slug
+    counter = 1
+    while True:
+        existing_game = await db.game.find_unique(where={"slug": slug})
+        if not existing_game:
+            break  # Slug is unique
+        # If slug exists, append counter and check again
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+        if counter > 10:  # Safety break to prevent infinite loop on weird edge cases
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not generate unique slug for {game_in.name}",
+            )
+    # -------------------------
+
+    # Check for existing game by name (as name is also unique)
+    existing_by_name = await db.game.find_unique(where={"name": game_in.name})
+    if existing_by_name:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Game creation failed due to unique constraint: {e}",
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A game with the name '{game_in.name}' already exists.",
+        )
+
+    try:
+        created_game = await db.game.create(
+            data={
+                "name": game_in.name,
+                "slug": slug,  # Add the generated slug
+                "description": game_in.description,
+                "price": game_in.price,
+                "released_date": game_in.released_date,
+                # Add other fields from GameCreateSchema if they map directly
+                # e.g., "background_image": game_in.background_image,
+            }
+        )
+        return Game.model_validate(created_game)  # Return validated model
+    except UniqueViolationError as e:
+        # This might catch the slug conflict again, though the loop should prevent it
+        # Or other unique constraints if added later
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A database conflict occurred: {e}",
         )
     except PrismaError as e:
         raise HTTPException(
@@ -163,12 +208,11 @@ async def create_game_endpoint(
             detail=f"Database error creating game: {e}",
         )
     except Exception as e:
+        # Catch unexpected errors
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creating game: {e}",
+            detail=f"An unexpected error occurred: {e}",
         )
-    # Validate and return using the local Pydantic model
-    return Game.model_validate(new_game_prisma)
 
 
 @router.delete(

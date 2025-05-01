@@ -10,6 +10,7 @@ import {
   ShoppingCartOutlined, // For Orders
   TagOutlined, // For Promotions
   LogoutOutlined, // For Logout
+  ReadOutlined, // For Blog
 } from "@ant-design/icons";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext"; // To get user info and logout
@@ -93,6 +94,9 @@ const AdminLayout: React.FC = () => {
           {/* <Menu.Item key="promotions" icon={<TagOutlined />}>
             <Link to="/admin/promotions">Promotions</Link>
           </Menu.Item> */}
+          <Menu.Item key="blog" icon={<ReadOutlined />}>
+            <Link to="/admin/blog">Blog</Link>
+          </Menu.Item>
         </Menu>
       </Sider>
       <Layout className="site-layout">

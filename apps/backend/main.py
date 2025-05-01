@@ -32,15 +32,7 @@ from middleware import TracebackMiddleware
 # from alembic.config import Config
 from routers import api_router
 
-# Remove individual router imports
-# from app.api.routes import (
-#     items_router,
-#     utils_router,
-#     # carts_router, # Still removed
-#     promotions_router,
-#     products_router,
-#     orders_router # Import the new orders router
-# )
+# Removed incorrect direct router imports
 
 # Instantiate settings here for the app
 settings = Settings()
@@ -100,15 +92,16 @@ app = FastAPI(
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     # Log the full traceback
-    tb_str = traceback.format_exception(exc=exc, etype=type(exc), tb=exc.__traceback__)
+    # Use simpler call signature for format_exception
+    tb_str_list = traceback.format_exception(exc)
+    tb_str = "".join(tb_str_list)  # Join the list into a single string
     logger.error("Unhandled exception:", exc_info=exc)
-    # You could also log tb_str if exc_info=True isn't sufficient
-    # logger.error("\n".join(tb_str))
 
     # Prepare response content
-    content = {"detail": "Internal Server Error"}
-    if settings.ENVIRONMENT == "local":  # Only include traceback in local env
-        content["traceback"] = tb_str
+    content = {
+        "detail": "Internal Server Error",
+        "traceback": tb_str,  # Include the formatted traceback string
+    }
 
     return JSONResponse(status_code=500, content=content)
 
@@ -135,6 +128,8 @@ app.add_middleware(
 # Include the main aggregated router with API version prefix
 app.include_router(api_router, prefix=settings.API_V1_STR)  # e.g., prefix="/api/v1"
 
+# Removed incorrect direct router includes
+
 
 # Logger
 def timestamp_log_config(uvicorn_log_config: dict[str, Any]) -> dict[str, Any]:
@@ -142,9 +137,9 @@ def timestamp_log_config(uvicorn_log_config: dict[str, Any]) -> dict[str, Any]:
     datefmt = "%d-%m-%Y %H:%M:%S"
     formatters = uvicorn_log_config["formatters"]
     formatters["default"]["fmt"] = "%(levelprefix)s [%(asctime)s] %(message)s"
-    formatters["access"]["fmt"] = (
-        '%(levelprefix)s [%(asctime)s] %(client_addr)s - "%(request_line)s" %(status_code)s'
-    )
+    formatters["access"][
+        "fmt"
+    ] = '%(levelprefix)s [%(asctime)s] %(client_addr)s - "%(request_line)s" %(status_code)s'
     formatters["access"]["datefmt"] = datefmt
     formatters["default"]["datefmt"] = datefmt
     return uvicorn_log_config

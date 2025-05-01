@@ -7,7 +7,7 @@ import ControlsHeader from "@/components/games/ControlsHeader";
 import GamePagination from "@/components/games/GamePagination";
 import { useCart } from "@/contexts/CartContext";
 import { useGameControllerListGames } from "@/gen/query/GamesHooks";
-import { GameWithRelations } from "@/gen/types";
+import { Game } from "@/gen/types";
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -95,7 +95,7 @@ const GamesPage: React.FC = () => {
     error,
     isLoading,
     mutate,
-  } = useGameControllerListGames(undefined, { ...apiParams });
+  } = useGameControllerListGames(apiParams);
 
   const apiResponse = response?.data;
   const gamesList = apiResponse?.items;

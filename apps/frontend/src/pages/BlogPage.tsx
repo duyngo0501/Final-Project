@@ -1,8 +1,9 @@
 import React from "react";
-import { List, Card, Typography, Space } from "antd";
+import { List, Card, Typography, Space, Spin, message } from "antd";
 import { Link } from "react-router-dom";
 import { UserOutlined, CalendarOutlined } from "@ant-design/icons";
-import { mockBlogPosts } from "@/mocks/blogMocks";
+import { useListBlogPostsApiV1BlogsGet } from "@/gen/query/BlogsHooks/index";
+import type { BlogResponseSchema } from "@/gen/types/index";
 
 const { Title, Paragraph } = Typography;
 
@@ -11,6 +12,45 @@ const { Title, Paragraph } = Typography;
  * @returns {JSX.Element} The rendered blog page.
  */
 const BlogPage: React.FC = () => {
+  const {
+    data: queryResponse,
+    error,
+    isLoading,
+  } = useListBlogPostsApiV1BlogsGet();
+
+  if (isLoading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "50vh",
+        }}
+      >
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (error) {
+    const detail = (error as any)?.response?.data?.detail;
+    const msg =
+      typeof error === "object" && error !== null && "message" in error
+        ? String(error.message)
+        : undefined;
+    const errorMsg = detail || msg || "Unknown error loading posts";
+    message.error(`Error loading posts: ${errorMsg}`);
+    return (
+      <div style={{ textAlign: "center", padding: "50px" }}>
+        <Title level={4}>Could not load blog posts.</Title>
+        <Paragraph>Please try again later.</Paragraph>
+      </div>
+    );
+  }
+
+  const blogPosts = queryResponse?.data?.items ?? [];
+
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto", padding: "30px 15px" }}>
       <Title level={2} style={{ textAlign: "center", marginBottom: "30px" }}>
@@ -19,15 +59,12 @@ const BlogPage: React.FC = () => {
       <List
         itemLayout="vertical"
         size="large"
-        dataSource={mockBlogPosts}
-        renderItem={(post) => (
-          <List.Item
-            key={post.id}
-            style={{ padding: 0, marginBottom: "24px" }} // Remove default padding, add margin
-          >
+        dataSource={blogPosts}
+        renderItem={(post: BlogResponseSchema) => (
+          <List.Item key={post.id} style={{ padding: 0, marginBottom: "24px" }}>
             <Card hoverable>
               <Title level={3}>
-                <Link to={`/blog/${post.id}`}>{post.title}</Link>
+                <Link to={`/blog-detail?id=${post.id}`}>{post.title}</Link>
               </Title>
               <Space
                 size="middle"
@@ -39,18 +76,19 @@ const BlogPage: React.FC = () => {
                 </span>
                 <span>
                   <CalendarOutlined style={{ marginRight: 8 }} />
-                  {new Date(post.date + "T00:00:00").toLocaleDateString(
-                    "en-US",
-                    {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    }
-                  )}
+                  {post.date
+                    ? new Date(post.date).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : "No date"}
                 </span>
               </Space>
-              <Paragraph>{post.excerpt}</Paragraph>
-              <Link to={`/blog/${post.id}`}>Read More...</Link>
+              <Paragraph>
+                {post.excerpt ?? post.content?.substring(0, 150) + "..."}
+              </Paragraph>
+              <Link to={`/blog-detail?id=${post.id}`}>Read More...</Link>
             </Card>
           </List.Item>
         )}
