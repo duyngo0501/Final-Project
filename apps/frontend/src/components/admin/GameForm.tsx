@@ -18,6 +18,10 @@ import { Game } from "@/gen/types/Game";
 import { HTTPValidationError } from "@/gen/types/HTTPValidationError";
 import dayjs from "dayjs";
 import { z } from "zod";
+import type { RcFile, UploadFile } from "antd/es/upload/interface"; // Import UploadFile type
+
+// Import Supabase client
+import { supabase } from "@/lib/supabaseClient";
 
 import { gameControllerCreateGame } from "@/gen/client/gameControllerCreateGame";
 import { gameCreateSchemaSchema as GameCreateSchema } from "@/gen/zod/gameCreateSchemaSchema";
@@ -35,7 +39,8 @@ export interface GameFormValues {
   price: number;
   discountedPrice?: number | null;
   category: string;
-  thumbnail?: any; // Ant Design Upload file list type
+  // Use UploadFile[] for Ant Design's controlled component state
+  thumbnail?: UploadFile[];
   releaseDate?: dayjs.Dayjs | null; // Use Dayjs for DatePicker
 }
 
@@ -72,97 +77,118 @@ const GameForm: React.FC<GameFormProps> = ({
   onCancel,
 }) => {
   const [form] = Form.useForm<GameFormValues>();
-  // --- State for manual loading management ---
   const [isMutating, setIsMutating] = useState(false);
+  const [fileList, setFileList] = useState<UploadFile[]>([]); // State for upload component
 
-  // --- Reinstate useEffect with assumed property names ---
   useEffect(() => {
     if (initialValues) {
-      // Assuming Game type uses these property names (adjust if needed)
-      // Linter errors here suggest the 'Game' type might be different than assumed.
-      // Commenting out potentially problematic fields for now.
+      // TODO: Handle initialValues for image display if editing
       form.setFieldsValue({
         title: initialValues.name, // Map name to title for form
-        description: initialValues.description ?? undefined, // Default null to undefined
-        price: initialValues.price ?? undefined, // Default null to undefined
-        // discountedPrice: initialValues.discounted_price ?? null,
-        // category: initialValues.category,
-        // thumbnail: initialValues.thumbnail
-        //   ? [
-        //       {
-        //         uid: "-1",
-        //         name: "current_image.png",
-        //         status: "done",
-        //         url: initialValues.thumbnail,
-        //       },
-        //     ]
-        //   : [],
-        releaseDate: initialValues.released_date // Assuming released_date exists
+        description: initialValues.description ?? undefined,
+        price: initialValues.price ?? undefined,
+        releaseDate: initialValues.released_date
           ? dayjs(initialValues.released_date)
           : null,
+        // Reset file list when initialValues change
+        thumbnail: [],
       });
+      setFileList([]); // Clear internal file list state
     } else {
       form.resetFields();
+      setFileList([]); // Clear internal file list state
     }
   }, [initialValues, form]);
 
   const handleFormSubmit = async (values: GameFormValues) => {
     console.log("Form Values submitted:", values);
     setIsMutating(true); // Start loading
-
-    // Prepare data for the API (map form fields to API schema)
-    // Filter out undefined/null properties that might not be accepted by the Zod schema
-    const apiData: Partial<z.infer<typeof GameCreateSchema>> = {
-      name: values.title, // Map form's title to API's name
-      description: values.description || undefined,
-      price: values.price,
-      // discounted_price: values.discountedPrice === null ? undefined : values.discountedPrice, // ERROR: Property does not exist
-      // category: values.category, // Assuming category is not part of GameCreateSchema based on error
-      released_date: values.releaseDate
-        ? values.releaseDate.toISOString()
-        : undefined,
-      // thumbnail: values.thumbnail?.[0]?.originFileObj, // Assuming thumbnail is not part of GameCreateSchema
-    };
-
-    console.log("Data being sent to API:", apiData);
+    let uploadedImageUrl: string | undefined = undefined;
 
     try {
+      // --- Handle Image Upload --- //
+      const imageFile = fileList[0]?.originFileObj as RcFile | undefined;
+      if (imageFile) {
+        console.log("Uploading image:", imageFile.name);
+        const fileExt = imageFile.name.split(".").pop();
+        const filePath = `${Date.now()}-${Math.random()}.${fileExt}`;
+        const bucketName = "game-images"; // Define your bucket name
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, imageFile);
+
+        if (uploadError) {
+          console.error("Supabase upload error:", uploadError);
+          throw new Error(`Image upload failed: ${uploadError.message}`);
+        }
+
+        // --- Get Public URL --- //
+        const { data: urlData } = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(filePath);
+
+        if (!urlData?.publicUrl) {
+          console.error("Failed to get public URL for path:", filePath);
+          // Attempt cleanup if URL fetch fails after successful upload?
+          // await supabase.storage.from(bucketName).remove([filePath]);
+          throw new Error("Image uploaded, but failed to get public URL.");
+        }
+
+        uploadedImageUrl = urlData.publicUrl;
+        console.log("Image uploaded successfully:", uploadedImageUrl);
+      }
+      // ------------------------ //
+
+      // Prepare data for the API
+      const apiData: Partial<z.infer<typeof GameCreateSchema>> = {
+        name: values.title,
+        description: values.description || undefined,
+        price: values.price,
+        released_date: values.releaseDate
+          ? values.releaseDate.toISOString()
+          : undefined,
+        // Include the uploaded image URL if available
+        background_image: uploadedImageUrl,
+      };
+
+      console.log("Data being sent to API:", apiData);
+
       if (initialValues) {
-        // TODO: Implement update logic using a direct client call
+        // TODO: Implement update logic (including potential image update/removal)
         console.warn("Update functionality not yet implemented in GameForm");
         message.warning("Update functionality is not implemented yet.");
-        // Example: await gameControllerUpdateGame(initialValues.id, updateData);
-        // Handle success/error for update...
       } else {
-        // Directly call the create client function
-        // Pass the data as the second argument (requestBody)
-        // The first argument seems to be for configs/options, pass empty object for now.
-        // This needs verification based on the actual generated client function signature.
-        // Correction: Pass apiData as the first argument based on linter error
-        // const response = await gameControllerCreateGame(apiData as z.infer<typeof GameCreateSchema>);
-        // Correction 2: Pass path params (none needed here, so maybe null/undefined?), then data, then options
-        // const response = await gameControllerCreateGame(undefined, apiData as z.infer<typeof GameCreateSchema>, {});
-        // Correction 3: Use correct signature: data first, params second (use {}), config is optional
-        // Correction 4: Provide required `args` and `kwargs` in the params object
-        const response = await gameControllerCreateGame(apiData as z.infer<typeof GameCreateSchema>, { args: undefined, kwargs: undefined });
-        message.success(`Game "${response.data.name}" created successfully!`); // Use name from response
+        // Create game - Corrected client call signature:
+        // First argument: requestBody (apiData)
+        // Second argument: optional config
+        const response = await gameControllerCreateGame(
+          apiData as z.infer<typeof GameCreateSchema>
+          // No need for the second argument if no specific config is needed
+        );
+        message.success(`Game "${response.data.name}" created successfully!`);
         form.resetFields();
+        setFileList([]); // Clear file list on successful creation
         if (onSubmitSuccess) {
           onSubmitSuccess(response.data);
         }
       }
-    } catch (error: any) { // Catch errors
+    } catch (error: any) {
+      // Catch errors (including upload errors)
       console.error("Error submitting game form:", error);
       let errorMsg = "Failed to process game request.";
-      const errorDetail = error?.response?.data?.detail || error?.detail || error?.message;
+      const errorDetail =
+        error?.response?.data?.detail || error?.detail || error?.message;
       if (errorDetail) {
         if (Array.isArray(errorDetail)) {
-          errorMsg = errorDetail.map(d => `${d.loc?.join('.') || 'error'}: ${d.msg}`).join("; ");
+          errorMsg = errorDetail
+            .map((d) => `${d.loc?.join(".") || "error"}: ${d.msg}`)
+            .join("; ");
         } else {
           errorMsg = String(errorDetail);
         }
       } else if (error instanceof Error) {
-         errorMsg = error.message;
+        errorMsg = error.message;
       }
       message.error(errorMsg);
     } finally {
@@ -170,17 +196,18 @@ const GameForm: React.FC<GameFormProps> = ({
     }
   };
 
-  // Basic validation for upload (customize as needed)
-  const normFile = (e: any) => {
-    console.log("Upload event:", e);
-    if (Array.isArray(e)) {
-      return e;
-    }
-    // Limit to one file for thumbnail
-    return e && e.fileList ? e.fileList.slice(-1) : [];
+  // Handle file list changes for controlled component
+  const handleUploadChange = ({
+    fileList: newFileList,
+  }: {
+    fileList: UploadFile[];
+  }) => {
+    setFileList(newFileList);
   };
 
-  const handleFinishFailed: FormProps<GameFormValues>["onFinishFailed"] = (errorInfo) => {
+  const handleFinishFailed: FormProps<GameFormValues>["onFinishFailed"] = (
+    errorInfo
+  ) => {
     console.log("Form validation failed:", errorInfo);
     message.error("Please correct the errors in the form.");
   };
@@ -190,7 +217,7 @@ const GameForm: React.FC<GameFormProps> = ({
       form={form}
       layout="vertical"
       onFinish={handleFormSubmit}
-      onFinishFailed={handleFinishFailed} // Use the typed handler
+      onFinishFailed={handleFinishFailed}
     >
       <Row gutter={16}>
         <Col span={12}>
@@ -205,7 +232,7 @@ const GameForm: React.FC<GameFormProps> = ({
         <Col span={12}>
           <Form.Item
             name="category"
-            label="Category"
+            label="Category (Mocked)"
             rules={[{ required: true, message: "Please select a category" }]}
           >
             <Select placeholder="Select game category">
@@ -232,7 +259,8 @@ const GameForm: React.FC<GameFormProps> = ({
             <InputNumber style={{ width: "100%" }} placeholder="e.g., 59.99" />
           </Form.Item>
         </Col>
-        <Col span={8}>
+        {/* Removed Discounted Price for simplicity with generated types */}
+        {/* <Col span={8}>
           <Form.Item
             name="discountedPrice"
             label="Discounted Price ($) (Optional)"
@@ -256,7 +284,7 @@ const GameForm: React.FC<GameFormProps> = ({
           >
             <InputNumber style={{ width: "100%" }} placeholder="e.g., 49.99" />
           </Form.Item>
-        </Col>
+        </Col> */}
         <Col span={8}>
           <Form.Item name="releaseDate" label="Release Date">
             <DatePicker style={{ width: "100%" }} />
@@ -268,28 +296,36 @@ const GameForm: React.FC<GameFormProps> = ({
         <TextArea rows={4} placeholder="Enter game description" />
       </Form.Item>
 
+      {/* Add Upload Component */}
       <Form.Item
         name="thumbnail"
-        label="Thumbnail Image"
+        label="Background Image"
         valuePropName="fileList"
-        getValueFromEvent={normFile}
-        extra="Upload a single image for the game thumbnail. Current image will be replaced."
-        // Add rules if upload is mandatory for creation
+        // Use internal state for controlled component
+        getValueFromEvent={(e) => {
+          if (Array.isArray(e)) {
+            return e;
+          }
+          return e && e.fileList;
+        }}
+        extra="Upload a single image for the game background."
       >
         <Upload
           name="thumbnailUpload"
           listType="picture"
-          beforeUpload={() => false}
+          beforeUpload={() => false} // Prevent default antd upload
           maxCount={1}
+          fileList={fileList} // Control file list state
+          onChange={handleUploadChange} // Handle state changes
         >
-          <Button icon={<UploadOutlined />}>Click to Upload</Button>
+          <Button icon={<UploadOutlined />}>Click to Upload Image</Button>
         </Upload>
       </Form.Item>
 
       <Form.Item>
         <Space>
           <Button type="primary" htmlType="submit" loading={isMutating}>
-            {initialValues ? "Save Changes" : "Create Game"}
+            {initialValues ? "Save Changes (Not Impl.)" : "Create Game"}
           </Button>
           {onCancel && (
             <Button onClick={onCancel} disabled={isMutating}>

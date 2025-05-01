@@ -14,7 +14,9 @@ import {
 // import { EditOutlined, DeleteOutlined } from '@ant-design/icons'; // Add later for actions
 import { OrderSummary, OrderListResponse } from "@/gen/types"; // Adjust path if needed
 import { type OrderControllerListOrdersQueryParams } from "@/gen/types/OrderControllerListOrders"; // Adjust path if needed
-import { useOrderControllerListOrders } from "@/gen/query/OrdersHooks"; // Adjust path if needed
+// Revert to the hook name that actually exists after generation
+import { useOrderControllerListOrders } from "@/gen/query/OrdersHooks"; // Use the existing hook name
+// import { useOrderControllerListAllOrdersAdmin } from "@/gen/query/OrdersHooks"; // This name doesn't exist
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import type { SorterResult, FilterValue } from "antd/es/table/interface";
 
@@ -53,7 +55,7 @@ const AdminOrdersPage: React.FC = () => {
     return params;
   }, [pagination, sorter]);
 
-  // --- Fetch Orders using Hook ---
+  // --- Fetch Orders using the available Hook ---
   const {
     data: response,
     error: fetchError,

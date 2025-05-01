@@ -18,6 +18,9 @@ import PaymentMethodSelection from "@/components/checkout/PaymentMethodSelection
 import OrderSummary from "@/components/checkout/OrderSummary";
 import { CartContext } from "@/contexts/CartContext";
 import { useContextSelector } from "use-context-selector";
+import { useAuth } from "@/contexts/AuthContext";
+import { useOrderControllerCreateOrder } from "@/gen/query/OrdersHooks";
+import type { OrderCreate, OrderResponse } from "@/gen/types";
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -47,7 +50,6 @@ const CheckoutPage: React.FC = () => {
   const [shippingAddress, setShippingAddress] =
     useState<ShippingAddressValues | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   const navigate = useNavigate();
   const cartItems = useContextSelector(
@@ -55,6 +57,10 @@ const CheckoutPage: React.FC = () => {
     (v) => v?.cart?.items ?? []
   );
   const clearCartAction = useContextSelector(CartContext, (v) => v?.clearCart);
+  const user = useAuth((state) => state.user);
+
+  const { trigger: createOrder, isMutating: isPlacingOrder } =
+    useOrderControllerCreateOrder();
 
   // Redirect if cart is empty on initial load or if user navigates back
   React.useEffect(() => {
@@ -95,39 +101,38 @@ const CheckoutPage: React.FC = () => {
   };
 
   const handlePlaceOrder = async () => {
+    if (!user || !user.email) {
+      message.error("User not found or email missing. Cannot place order.", 5);
+      return;
+    }
+
     if (!shippingAddress || !paymentMethod) {
       message.error("Missing shipping or payment details.");
       return;
     }
 
-    const orderData = {
-      shippingAddress,
-      paymentMethod,
-      items: cartItems,
-      // TODO: Add total, user info, etc.
+    const orderApiData: OrderCreate = {
+      customer_email: user.email,
     };
 
-    setIsPlacingOrder(true);
     let hideLoading: (() => void) | null = message.loading(
       "Placing order...",
       0
     );
 
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      console.log("Order Placed Successfully:", orderData);
+      const response = await createOrder(orderApiData);
+
+      console.log("Order Placed Successfully:", response.data);
 
       if (hideLoading) hideLoading();
       message.success("Order Placed Successfully! Redirecting...", 2);
 
-      // Clear cart after successful order
       if (typeof clearCartAction === "function") {
         try {
           await clearCartAction();
         } catch (clearError) {
           console.error("Failed to clear cart:", clearError);
-          // Optionally show a non-blocking message to the user
           message.warning(
             "Order placed, but failed to clear cart automatically."
           );
@@ -136,16 +141,22 @@ const CheckoutPage: React.FC = () => {
         console.warn("clearCart action not found or not a function in context");
       }
 
-      // Redirect to confirmation page (pass order details if needed)
-      navigate("/order-confirmation", {
-        state: { orderId: "mock-" + Date.now() },
+      // Redirect to landing page after successful order
+      navigate("/", {
+        // Remove state, no need to pass orderId to landing page
+        // state: { orderId: response.data.id },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Place order error:", error);
       if (hideLoading) hideLoading();
-      message.error("Failed to place order. Please try again.");
-    } finally {
-      setIsPlacingOrder(false);
+      const detail = (error as any)?.response?.data?.detail;
+      const msg =
+        typeof error === "object" && error !== null && "message" in error
+          ? String(error.message)
+          : undefined;
+      message.error(
+        detail || msg || "Failed to place order. Please try again."
+      );
     }
   };
 

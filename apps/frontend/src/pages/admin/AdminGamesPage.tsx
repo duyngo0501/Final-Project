@@ -10,11 +10,13 @@ import {
   Row,
   Modal,
   message,
+  Image,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Game, GameListingResponse } from "@/gen/types"; // Generated API types
 import { type GameControllerListGamesQueryParams } from "@/gen/types/GameControllerListGames";
 import { useGameControllerListGames } from "@/gen/query/GamesHooks"; // Import the SWR hook
+import { gameControllerDeleteGame } from "@/gen/client";
 import type { ColumnsType } from "antd/es/table";
 import type { Key } from "react";
 import GameForm, { GameFormValues } from "@/components/admin/GameForm"; // Import the form
@@ -93,6 +95,8 @@ const AdminGamesPage: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null); // Use Game type
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // --- Modal Handlers ---
   const showAddModal = () => {
@@ -150,26 +154,30 @@ const AdminGamesPage: React.FC = () => {
 
   // --- Delete Handler ---
   const handleDeleteGame = (game: Game) => {
-    // Use UIGame type
     Modal.confirm({
       title: `Delete Game: ${game.name}?`,
       content: "Are you sure? This cannot be undone.",
       okText: "Delete",
       okType: "danger",
       onOk: async () => {
+        setIsDeleting(true);
+        setDeletingId(game.id);
         try {
-          // Note: Consider using a different loading state for delete if needed
-          // setIsDeleting(true);
-          console.log("[Mock API] Deleting game:", game.id);
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          // TODO: Call actual delete API: await gamesAdminAPI.deleteGame(game.id);
+          // Call the actual delete client function
+          await gameControllerDeleteGame(game.id); // Pass game ID
           message.success(`Game '${game.name}' deleted successfully!`);
           mutate?.(); // Revalidate data
         } catch (error: any) {
           console.error("Failed to delete game:", error);
-          message.error(error.message || "Failed to delete game.");
+          const detail = (error as any)?.response?.data?.detail;
+          const msg =
+            typeof error === "object" && error !== null && "message" in error
+              ? String(error.message)
+              : undefined;
+          message.error(detail || msg || "Failed to delete game.");
         } finally {
-          // setIsDeleting(false);
+          setIsDeleting(false);
+          setDeletingId(null);
         }
       },
     });
@@ -193,29 +201,37 @@ const AdminGamesPage: React.FC = () => {
       key: "id",
       sorter: true, // Enable server-side sorting
       width: 150, // Adjust width if needed for UUIDs
+      ellipsis: true, // Add ellipsis for long IDs
     },
     {
-      title: "Image", // Added Image column
+      title: "Image",
       dataIndex: "background_image",
       key: "image",
       width: 100,
-      render: (image_url: string | null, record: Game) =>
-        image_url ? (
-          <img
-            src={image_url}
-            alt={record.name}
-            style={{ width: "80px", height: "auto", objectFit: "cover" }}
+      align: "center",
+      render: (imageUrl: string | null, record: Game) => {
+        return imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt={record.name ?? "Game Image"}
+            width={80} // Set a fixed width for the thumbnail
+            preview={{
+              mask: <span style={{ fontSize: 12 }}>Preview</span>,
+            }} // Enable preview on click
+            style={{ objectFit: "cover" }} // Ensure image covers the area
           />
         ) : (
-          "No Image"
-        ),
-      // No sorting for images
+          <span style={{ color: "#ccc" }}>No Image</span> // Placeholder text
+        );
+      },
+      // No sorter needed for image
     },
     {
       title: "Title",
       dataIndex: "name",
       key: "name",
       sorter: true,
+      ellipsis: true,
     },
     {
       title: "Rating", // Added Rating column
@@ -259,15 +275,15 @@ const AdminGamesPage: React.FC = () => {
       align: "center" as const,
       render: (_: any, record: Game) => (
         <Space size="small">
-          <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
+          {/* Hide Edit Button until functionality is implemented */}
+          {/* <Button icon={<EditOutlined />} onClick={() => showEditModal(record)}>
             Edit
-          </Button>
+          </Button> */}
           <Button
             danger
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteGame(record)}
-            // Consider adding loading state here if delete takes time
-            // loading={isDeleting && deletingId === record.id}
+            loading={isDeleting && deletingId === record.id}
           >
             Delete
           </Button>

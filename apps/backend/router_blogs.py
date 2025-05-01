@@ -5,10 +5,8 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Request, Query, Path, Response
 from pydantic import BaseModel, Field
 
-# Import settings
+# Direct imports (assuming apps/backend is in PYTHONPATH or handled by execution context)
 from config import settings
-
-# Manual Imports Needed (instead of Depends)
 from db import get_db
 from auth import get_current_user, reusable_oauth2
 from db_supabase import SupabaseUser  # For type hint

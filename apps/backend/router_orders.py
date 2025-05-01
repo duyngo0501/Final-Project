@@ -5,9 +5,13 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+# Direct imports (assuming apps/backend is in PYTHONPATH or handled by execution context)
+from config import settings
 from db import get_db
 from auth import get_current_user, reusable_oauth2
 from db_supabase import SupabaseUser
+
+# Imports for prisma - assuming handled by environment/installation
 from prisma import Prisma
 from prisma.errors import PrismaError
 from prisma.models import Game, Order, OrderItem, ShoppingCart, CartEntry
@@ -123,7 +127,7 @@ async def clear_cart_for_user_prisma(user_id: str, db: Prisma):
 
         if cart:
             # Delete CartEntry items associated with the cart ID
-            await db.cartentry.delete_many(where={"cart_id": cart.id}) # Use cart_id
+            await db.cartentry.delete_many(where={"cart_id": cart.id})  # Use cart_id
             logger.info(f"Cleared cart for user {user_id}")
         else:
             logger.info(f"No cart found to clear for user {user_id}")
@@ -164,21 +168,30 @@ async def create_order(
         token = await reusable_oauth2(request)
     except HTTPException as e:
         logger.error(f"Token extraction error: {e.detail}")
-        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
-        
+        raise HTTPException(
+            status_code=e.status_code, detail=f"Token error: {e.detail}"
+        )
+
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
+
     try:
         current_user: SupabaseUser = await get_current_user(token=token)
     except HTTPException as e:
         logger.error(f"Authentication error creating order: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error getting user for create order: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to create order")
+        logger.error(
+            f"Unexpected error getting user for create order: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not retrieve user to create order",
+        )
     # --- End Manual Fetch ---
-    
+
     logger.info(f"Received order request from email: {order_in.customer_email}")
     user_id = current_user.id
 
@@ -317,7 +330,7 @@ async def read_orders(
     """
     Retrieve a list of orders with filtering, sorting, and pagination.
     - Regular users see only their own orders.
-    - Admin users can see all orders and use admin-specific filters.
+    - Admin users (matching ADMIN_EMAIL) can see all orders and use admin-specific filters.
     """
     # --- Manual Fetch DB and User ---
     db = await get_db()
@@ -326,23 +339,36 @@ async def read_orders(
         token = await reusable_oauth2(request)
     except HTTPException as e:
         logger.error(f"Token extraction error: {e.detail}")
-        raise HTTPException(status_code=e.status_code, detail=f"Token error: {e.detail}")
-        
+        raise HTTPException(
+            status_code=e.status_code, detail=f"Token error: {e.detail}"
+        )
+
     if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-        
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
+
     try:
         current_user: SupabaseUser = await get_current_user(token=token)
     except HTTPException as e:
         logger.error(f"Authentication error reading orders: {e.detail}")
         raise e
     except Exception as e:
-        logger.error(f"Unexpected error getting user for read orders: {e}", exc_info=True)
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not retrieve user to read orders")
+        logger.error(
+            f"Unexpected error getting user for read orders: {e}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not retrieve user to read orders",
+        )
     # --- End Manual Fetch ---
-    
-    # Determine if the user is an admin
-    is_admin = getattr(current_user, 'app_metadata', {}).get("claims_admin") is True
+
+    # Determine if the user is an admin using settings.ADMIN_EMAIL
+    is_admin = current_user.email == settings.ADMIN_EMAIL
+    if is_admin:
+        logger.info(f"Admin access granted for user: {current_user.email}")
+    else:
+        logger.info(f"Regular user access for: {current_user.email}")
 
     # Build WHERE clause
     where_clause = {}
@@ -350,10 +376,11 @@ async def read_orders(
     # Mandatory filter for non-admins
     if not is_admin:
         where_clause["user_id"] = current_user.id
-    elif user_id:  # Admin filter by user_id
+    # Optional filter for admins if user_id query param is provided
+    elif user_id:
         where_clause["user_id"] = user_id
 
-    # Common filters
+    # Common filters (accessible to both admin and non-admin for their respective views)
     if status:
         where_clause["status"] = status
     if start_date:
@@ -364,17 +391,18 @@ async def read_orders(
         else:
             where_clause["order_date"] = {"lte": end_date}
 
-    # Admin-only filters
+    # Admin-only filters (customer_email)
     if is_admin and customer_email:
         where_clause["customer_email"] = {
             "contains": customer_email,
             "mode": "insensitive",
         }
-    elif not is_admin and (user_id or customer_email):
-        # Prevent non-admins from using admin filters
+    # Prevent non-admins from using admin filters (user_id already handled above)
+    # This check specifically blocks customer_email for non-admins
+    elif not is_admin and customer_email:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions to filter by user_id or customer_email",
+            detail="Insufficient permissions to filter by customer_email",
         )
 
     # Build ORDER BY clause
@@ -391,7 +419,7 @@ async def read_orders(
     # order_by_clause = [{prisma_sort_field: sort_order}]
 
     try:
-        # Get total count
+        # Get total count based on the final where_clause
         total = await db.order.count(where=where_clause)
 
         # Get paginated orders with item count included
@@ -399,8 +427,8 @@ async def read_orders(
             where=where_clause,
             skip=skip,
             take=limit,
-            # order_by=order_by_clause, # Re-enable order by
-            include={'order_items': True} # Include items to count them
+            # order_by=order_by_clause, # Re-enable order by if needed
+            include={"order_items": True},  # Include items to count them
         )
 
         # Map to response model, calculating item count
@@ -411,7 +439,9 @@ async def read_orders(
                 customer_email=o.customer_email,
                 total_amount=o.total_amount,
                 status=o.status,
-                item_count=len(o.order_items) if o.order_items else 0, # Calculate count
+                item_count=(
+                    len(o.order_items) if o.order_items else 0
+                ),  # Calculate count
             )
             for o in orders_db
         ]
